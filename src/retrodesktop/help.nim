@@ -18,12 +18,17 @@ Choose a topic:
 * [Keys](topic:keys)
 * [Program Manager](topic:progman) and [Setup](topic:setup)
 * [Terminal](topic:terminal) and [Retro Browser](topic:browser)
-* [Write](topic:write), [Clipboard Viewer](topic:clipboard)
+* [The panel](topic:panel) and [icons on the desktop](topic:icons)
+* [Write](topic:write), [Clipboard Viewer](topic:clipboard), [Character Map](topic:charmap)
+* [Picture Viewer](topic:pictures), [PDF Reader](topic:pdf), [Media Player](topic:media),
+  [Sound Recorder](topic:recorder)
+* [Communicator](topic:communicator), [News Reader](topic:news), [Share Desktop](topic:share)
+* [Camera](topic:camera), [Phone Dialer](topic:dialer), [Disk Space](topic:diskspace)
 * [Clock](topic:clock), [Calculator](topic:calc), [Calendar](topic:calendar), [Cardfile](topic:cardfile)
 * [Task List](topic:tasklist), [Control Panel](topic:control)
 * [Minesweeper](topic:mines), [Solitaire](topic:solitaire), [Reversi](topic:reversi)
 * [DOS games](topic:dos)
-* [Android and Termux](topic:android)
+* [Android and Termux](topic:android), [Android apps](topic:androidapps)
 """),
   ("desktop", "Using the desktop", """
 # Using the desktop
@@ -32,8 +37,9 @@ Every program opens in its own window.
 
 * **Move** a window by its title bar; **size** it by its border or a corner.
   Near an edge of the screen or of another window it snaps against it.
-* The **minimize** button (the arrow down) makes it an icon at the bottom of
-  the desktop; double click the icon (tap it on a touch screen) to bring it back.
+* The **minimize** button (the arrow down) puts it away: a button on the
+  [panel](topic:panel) (or, with the panel off, an icon at the bottom of the
+  desktop: double click it -- tap it -- to bring it back).
 * The **maximize** button (the arrow up), or a double click on the title bar,
   makes it fill the screen.
 * The **control-menu box** (the bar at the left of the title) has Restore,
@@ -57,7 +63,7 @@ where they were. See also [Keys](topic:keys) and [Contents](topic:contents).
 | Alt+Esc | minimizes it |
 | Ctrl+Esc | the Task List |
 | F1 | Help, at the page of the program in front |
-| Android's Back | closes the window in front (when Termux:X11 sends it as Back) |
+| Android's Back | closes the window in front -- when Control Panel > Windows says so, and Termux:X11 sends it as Back |
 | Ctrl+Shift+C, V | copy and paste in the Terminal |
 
 [Contents](topic:contents)
@@ -75,6 +81,8 @@ Development, Graphics, Multimedia, System), and **DOS** once DOSBox-X is in.
   Programs in StartUp start with the desktop.
 * **Options > Refresh** (F5) looks again; programs you install appear by
   themselves after a few seconds anyway.
+* **File > Put on the Desktop** (or a right click on a program) makes an icon
+  for it on the desktop: [icons on the desktop](topic:icons).
 
 [Setup](topic:setup) installs more. [Contents](topic:contents)
 """),
@@ -166,17 +174,24 @@ answer; Cascade and Tile arrange the windows. [Contents](topic:contents)
   ("control", "Control Panel", """
 # Control Panel
 
-* **Color**: the color scheme of every window (and of GTK programs).
+* **Color**: the color scheme of every window (and of GTK programs); night
+  colors: another scheme between two hours (Dark, OLED Black...), the day's after.
 * **Desktop**: its color, pattern and wallpaper (pictures of yours, or the
   desktop's own), Termux kept awake, the programs reopened.
-* **Fonts**: the font, the text size, the size of everything.
-* **Windows**: frames for fingers, windows that open maximized, programs
-  paused while minimized (no CPU, no battery).
+* **Fonts**: the font -- one of yours too: Add a Font takes a .ttf or .otf
+  into your fonts folder, where every program finds it -- the text size, the
+  size of everything.
+* **Windows**: frames for fingers, the [panel](topic:panel), windows that
+  open maximized, programs paused while minimized (no CPU, no battery), and
+  in Termux whether Android's Back key closes the window in front (off at
+  first: Termux:X11 uses Back for its keyboard).
 * **Date/Time**: 12 or 24 hours, the time zone.
 * **Sound**: which chime goes with which event.
 * **Screen Saver**: after a delay with nothing done.
 * **Linux Programs**: the look given to other programs; 3D through
-  Android's GPU (VirGL). [Contents](topic:contents)
+  Android's GPU (VirGL).
+* **International**: the desktop's programs in English or in Arabic (right
+  to left). [Contents](topic:contents)
 """),
   ("mines", "Minesweeper", """
 # Minesweeper
@@ -229,6 +244,139 @@ Android stops programs it thinks you do not use. For a desktop that stays:
 Main > **Android Files** shows the phone's photos, downloads and documents.
 When Android ends Termux anyway, the programs that were open open again
 the next time. [Contents](topic:contents)
+"""),
+  ("androidapps", "Android apps", """
+# Android apps
+
+Program Manager's **Android** group has the apps you installed on the phone
+(the desktop asks Android for them when it starts; they appear the time
+after). A double click opens the app on Android, over Termux:X11: come back
+to the desktop with Android's recent apps. The phone's own apps (Phone,
+Settings...) are not listed. [Contents](topic:contents)
+"""),
+  ("panel", "The panel", """
+# The panel
+
+A bar along the bottom of the screen -- 3.1 had none: it came with Windows
+95, and here it wears 3.1's colors.
+
+* **Programs**, at the left: every group of Program Manager in a menu, and
+  Run, Help, Control Panel, Task List, Exit.
+* A **button for each window**: a click brings it to the front, a click on the
+  one in front minimizes it; a right click opens its control menu.
+* At the right: the battery (on a phone, a laptop) and the clock; a click on
+  the clock opens Clock.
+
+Control Panel > Windows turns it off: the windows minimized are icons at the
+bottom of the desktop again, as in 3.1. [Contents](topic:contents)
+"""),
+  ("icons", "Icons on the desktop", """
+# Icons on the desktop
+
+What is in your **Desktop** folder shows on the desktop: folders, files and
+programs. Program Manager's **File > Put on the Desktop** puts a program there.
+
+* A double click (a tap with frames for fingers) opens it -- a file in its
+  program, a folder in File Manager.
+* Drag an icon where you want it: it stays there.
+* A right click: Open, Show in File Manager, Remove from the Desktop (a
+  program's icon), Arrange Icons. [Contents](topic:contents)
+"""),
+  ("charmap", "Character Map", """
+# Character Map
+
+Letters and symbols you cannot type, to copy into any program: choose the
+font and the block (Latin, Greek, Arabic, arrows, mathematics, shapes...).
+The character under the pointer shows larger. Click one and **Select** (or a
+double click) adds it to the characters to copy; **Copy** takes them to the
+clipboard. [Contents](topic:contents)
+"""),
+  ("pictures", "Picture Viewer", """
+# Picture Viewer
+
+Your pictures, as small pictures of a folder (the phone's photos at first, in
+Termux). A double click (a tap) shows one large: the arrows (or a tap at the
+left or right third) go to the one before or after; Turn rotates it; F5 starts
+a slide show. **Set as Wallpaper**, **Edit in Paintbrush**, and in Termux
+**Send to Android** (share it with any app). [Contents](topic:contents)
+"""),
+  ("pdf", "PDF Reader", """
+# PDF Reader
+
+Opens PDF documents: the pages one under another; zoom in and out, page
+width, Go to Page (Ctrl+G). The documents opened last are in the File menu.
+Write and Notepad make PDFs with **File > Print to PDF**. [Contents](topic:contents)
+"""),
+  ("media", "Media Player", """
+# Media Player
+
+Music and videos, played by mpv (Setup > Multimedia > mpv): open files or a
+whole folder as the play list; play, pause, the one before and after, the
+place in it, the volume. Videos open in a window of their own. The play
+list is kept for the next time. [Contents](topic:contents)
+"""),
+  ("recorder", "Sound Recorder", """
+# Sound Recorder
+
+**Record**, **Stop**, play it back. In Termux it records with the phone's
+microphone (Termux:API) into Recordings in the phone's storage; on Linux with
+PulseAudio or ALSA. The recordings are listed: play one, delete it, or send it
+to Android. [Contents](topic:contents)
+"""),
+  ("camera", "Camera", """
+# Camera
+
+Photos with the phone's cameras (Termux:API): choose the camera, **Take
+Photo**, and it is shown and kept in the phone's DCIM/Retro folder (the
+gallery finds it there). Android asks once to let Termux:API use the camera.
+[Contents](topic:contents)
+"""),
+  ("dialer", "Phone Dialer", """
+# Phone Dialer
+
+The phone the desktop runs on, through Termux:API: **Dial** a number (the keys
+or the keyboard), your **Contacts**, the **Messages** as conversations (read
+one, write an answer), the **Calls** made, received and missed. Android asks
+once for each. [Contents](topic:contents)
+"""),
+  ("news", "News Reader", """
+# News Reader
+
+News feeds (RSS and Atom): a few to start with, **Feeds > Add a Feed** for any
+site's. Choose a feed, then a story: its words show below; **Read on the
+Site** opens it in the browser. F5 reads them again. [Contents](topic:contents)
+"""),
+  ("diskspace", "Disk Space", """
+# Disk Space
+
+How full the storage is, and what fills it: the folders and files of your
+home (or the phone's storage, or the programs') by size, measured while you
+look. A double click goes into a folder, Up comes back. **Disk > Clean the
+Package Cache** lets go of the packages apt kept after installing.
+[Contents](topic:contents)
+"""),
+  ("share", "Share Desktop", """
+# Share Desktop
+
+Use this desktop from a computer: install x11vnc (Setup > System), choose a
+password and **Share**. On the computer, a VNC viewer (TigerVNC, RealVNC,
+Remmina...) connects to the address shown. **Stop Sharing** ends it. Anyone
+on the network with the password can see and use the desktop while it is
+shared. [Contents](topic:contents)
+"""),
+  ("communicator", "Communicator", """
+# Communicator
+
+Talk to your friends, on XMPP (Jabber): any server, your own account or a new
+one made here.
+
+* The **Friends** list: who is there, away or busy, and their notes. A double
+  click starts a talk; a right click: Info, Rename, Remove.
+* **Add** a friend by their address (name@server); they are asked to accept.
+* **Rooms**: talk with many at once.
+* Send a picture or a file; set your picture, your name, your away message.
+
+[Contents](topic:contents)
 """)]
 
 proc topicIndex(name: string): int =

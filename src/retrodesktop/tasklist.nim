@@ -47,7 +47,7 @@ proc runTaskList*() =
     wakeIn(2000)
     let ev = grid(cols, list.len,
       proc (row, col: int): string =
-        if col == 0: (if list[row].iconic: list[row].title & "  (icon)" else: list[row].title)
+        if col == 0: (if list[row].iconic: tr(list[row].title) & "  (icon)" else: tr(list[row].title))
         else: mb(mem[row]),
       sel, height = max(3, (remainingH() - 2 * CtrlH - lineHeight() - 6 * Gap) div ItemH - 2),
       tapActivates = fingers() or isMobile(),

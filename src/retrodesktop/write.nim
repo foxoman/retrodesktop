@@ -7,7 +7,7 @@
 
 import std/[os, strutils]
 import retroui
-import retroui/richedit
+import retroui/[richedit, report]
 import common, link, help
 
 var
@@ -18,6 +18,8 @@ var
   then = ""                      # what to do once the question is answered
   errorText = ""
   pickPath = ""
+  showPdf = false
+  pdfPath = ""
 
 proc docName(): string = (if path.len > 0: path.extractFilename else: "(Untitled)")
 
@@ -98,6 +100,10 @@ proc runWrite*(args: seq[string]) =
           pickPath = (if path.len > 0: path else: getHomeDir() / "Document.html")
           showSave = true
         menuSeparator()
+        if menuItem("&Print to PDF...", "Ctrl+P"):
+          pdfPath = (if path.len > 0: path.changeFileExt(".pdf") else: getHomeDir() / "Document.pdf")
+          showPdf = true
+        menuSeparator()
         if menuItem("E&xit"): ask("exit")
       menu "&Edit":
         if menuItem("&Undo", "Ctrl+Z", enabled = richCanUndo(doc)): richUndo(doc)
@@ -128,6 +134,9 @@ proc runWrite*(args: seq[string]) =
     if hotkeyPressed("Ctrl+N"): ask("new")
     if hotkeyPressed("Ctrl+O"): ask("open")
     if hotkeyPressed("Ctrl+S"): discard save()
+    if hotkeyPressed("Ctrl+P"):
+      pdfPath = (if path.len > 0: path.changeFileExt(".pdf") else: getHomeDir() / "Document.pdf")
+      showPdf = true
     richToolbar(doc)
     if richEdit(doc, placeholder = "Write here"): saved = false
     # the dialogs
@@ -139,6 +148,17 @@ proc runWrite*(args: seq[string]) =
       var p = pickPath
       if p.splitFile.ext.len == 0: p &= ".html"
       if store(p) and then.len > 0: carryOn()
+    if fileDialog(showPdf, pdfPath, fmSave, ["PDF Documents (*.pdf)"], title = "Print to PDF"):
+      # (the document as pages: its HTML laid out by Retro Nim UI's reports)
+      var p = pdfPath
+      if p.splitFile.ext.toLowerAscii != ".pdf": p &= ".pdf"
+      try:
+        let r = reportFromHtml("<html><body>" & toHtml(doc) & "</body></html>", title = docName())
+        r.savePdf(p)
+        launch(selfCommand("pdf") & " " & quoteShell(p))
+      except CatchableError as e:
+        errorText = "The PDF could not be made: " & e.msg
+        showError = true
     if askSave:
       let r = msgBox(askSave, "Write", "Save the changes to " & docName() & "?",
                      ["&Yes", "&No", "Cancel"], miQuestion)

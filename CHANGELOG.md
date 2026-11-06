@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.1.7
+
+- **The panel**: a bar along the bottom -- Windows 95's idea, in 3.1's
+  colors -- with **Programs** (every Program Manager group as a menu, and
+  Run, Help, Control Panel, Task List, Exit), a button for each window (a
+  click brings it to the front or minimizes the one in front; a right click
+  its control menu), the battery and the clock. Maximized windows stop
+  above it. Control Panel > Windows turns it off (minimized windows are
+  icons on the desktop again).
+- **Icons on the desktop**: what is in your Desktop folder -- folders,
+  files, programs -- on the desktop; drag them where you want them (they
+  stay), a double click (a tap) opens one, a right click for Open, Show in
+  File Manager, Remove, Arrange Icons. Program Manager's **File > Put on
+  the Desktop** makes a program's icon.
+- **New programs**: Character Map; Picture Viewer (thumbnails, slide show,
+  rotate, set as wallpaper, edit in Paintbrush, send to Android); PDF
+  Reader; Media Player (mpv underneath: a play list, seek, volume); Sound
+  Recorder (the phone's microphone through Termux:API, or PulseAudio and
+  ALSA); Camera and Phone Dialer (Termux:API: photos, calls, contacts,
+  messages as conversations, the call log); News Reader (RSS and Atom);
+  Disk Space (what fills the storage, the package caches let go); Share
+  Desktop (this desktop on a computer through x11vnc; x11vnc is in Setup).
+- **Communicator and Mail** come in the package: Retro Communicator (chat
+  on XMPP: friends, groups, rooms, away messages, profiles, files) and Retro
+  Mail, from Retro Nim UI's examples.
+- **The Android apps** in Program Manager's Android group: the desktop asks
+  Android for them when it starts; a double click opens one.
+- **Night colors**: Control Panel > Color chooses a scheme for the night
+  and its hours; the desktop and its programs change at those hours.
+- **Fonts of your own**: Control Panel > Fonts adds .ttf and .otf files to
+  your fonts folder (every program finds them) and can make one the
+  desktop's font.
+- **Arabic**: Control Panel > International puts the desktop's programs,
+  menus, Program Manager, the panel and the frames' titles in Arabic, right
+  to left.
+- **Print to PDF** in Write (Ctrl+P); the PDF opens in PDF Reader.
+- **Android's Back key is an option now**, off at first (Control Panel >
+  Windows): Termux:X11 uses Back for its keyboard, and a browser for going
+  back.
+- Help has pages for every new program, the panel and the icons; the
+  desktop's icons are drawn for each of them.
+- Needs Retro Nim UI 0.21.0 (chat on XMPP, Notepad's Print to PDF).
+
 ## 0.1.6
 
 - **Sounds**: chimes of the desktop's own (made from sine waves the first

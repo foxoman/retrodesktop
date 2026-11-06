@@ -6,14 +6,14 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils, math, times]
+import std/[os, strutils, math, times, algorithm]
 import retroui
 import common, link, art, sounds, help
 
 type Applet = enum
   apColor = "Color", apDesktop = "Desktop", apFonts = "Fonts", apWindows = "Windows",
   apDateTime = "Date/Time", apSound = "Sound", apSaver = "Screen Saver", apPrograms = "Linux Programs",
-  apAndroid = "Android", apAbout = "About"
+  apAndroid = "Android", apInternational = "International", apAbout = "About"
 
 var
   conf: Settings
@@ -50,6 +50,17 @@ var
   evSel = 0
   pickSound = false
   pickedSound = ""
+  night = false
+  nightFrom = 19
+  nightTo = 7
+  nightScheme = 0
+  panelOn = true
+  backKey = false
+  fontFile = ""
+  fontSel = 0
+  pickFont = false
+  newFont = ""
+  language = 0
 
 const
   Savers* = ["(None)", "Blank Screen", "Starfield", "Mystify", "Marquee"]
@@ -59,6 +70,19 @@ const
            "America/Sao_Paulo", "Australia/Sydney"]
   WallModes = ["fill", "center", "tile", "stretch"]
   AutoOnOff = ["auto", "on", "off"]
+  Languages = ["en", "ar"]
+  LanguageNames = ["English", "العربية (Arabic)"]
+
+proc hourNames(): seq[string] =
+  for h in 0 .. 23: result.add (if h < 10: "0" else: "") & $h & ":00"
+
+proc myFonts(): seq[string] =
+  ## The font files of yours (in the fonts folder), by name.
+  let dir = fontsFolder()
+  if dirExists(dir):
+    for kind, p in walkDir(dir):
+      if kind in {pcFile, pcLinkToFile} and p.splitFile.ext.toLowerAscii in [".ttf", ".otf"]: result.add p
+  result.sort(proc (a, b: string): int = cmpIgnoreCase(a.extractFilename, b.extractFilename))
 
 proc patternNames(): seq[string] =
   for (n, _) in Patterns: result.add n
@@ -70,7 +94,17 @@ proc readAll() =
   pattern = max(0, patternNames().find(conf.setting("pattern", "(None)")))
   wallpaper = conf.setting("wallpaper", "")
   wallMode = max(0, WallModes.find(conf.setting("wallpaperMode", "fill")))
-  fontKind = max(0, ["sans", "serif", "mono"].find(conf.setting("font", "sans")))
+  fontKind = max(0, ["sans", "serif", "mono", "file"].find(conf.setting("font", "sans")))
+  fontFile = conf.setting("fontFile", "")
+  night = conf.setting("night", "off") == "on"
+  try:
+    nightFrom = clamp(parseInt(conf.setting("nightFrom", "19")), 0, 23)
+    nightTo = clamp(parseInt(conf.setting("nightTo", "7")), 0, 23)
+  except ValueError: discard
+  nightScheme = max(0, schemeNames().find(conf.setting("nightScheme", "Dark")))
+  panelOn = conf.setting("panel", "on") != "off"
+  backKey = conf.setting("backKey", "off") == "on"
+  language = max(0, Languages.find(conf.setting("language", "en")))
   try: textPct = parseInt(conf.setting("textScale", "100")) except ValueError: textPct = 100
   try: sizePct = parseInt(conf.setting("size", "100")) except ValueError: sizePct = 100
   touch = max(0, AutoOnOff.find(conf.setting("touch", "auto")))
@@ -98,7 +132,16 @@ proc saveAll() =
   conf["pattern"] = patternNames()[clamp(pattern, 0, Patterns.high)]
   conf["wallpaper"] = wallpaper
   conf["wallpaperMode"] = WallModes[clamp(wallMode, 0, WallModes.high)]
-  conf["font"] = ["sans", "serif", "mono"][clamp(fontKind, 0, 2)]
+  if fontKind == 3 and fontFile.len == 0: fontKind = 0
+  conf["font"] = ["sans", "serif", "mono", "file"][clamp(fontKind, 0, 3)]
+  conf["fontFile"] = fontFile
+  conf["night"] = (if night: "on" else: "off")
+  conf["nightFrom"] = $nightFrom
+  conf["nightTo"] = $nightTo
+  conf["nightScheme"] = schemeNames()[clamp(nightScheme, 0, schemeNames().high)]
+  conf["panel"] = (if panelOn: "on" else: "off")
+  conf["backKey"] = (if backKey: "on" else: "off")
+  conf["language"] = Languages[clamp(language, 0, Languages.high)]
   if textPct != 100 or conf.hasKey("textScale"): conf["textScale"] = $textPct
   if sizePct != 100 or conf.hasKey("size"): conf["size"] = $sizePct
   conf["touch"] = AutoOnOff[clamp(touch, 0, 2)]
@@ -125,13 +168,14 @@ proc artOf(a: Applet): string =
   case a
   of apColor: "paint"
   of apDesktop: "control"
-  of apFonts: "readme"
+  of apFonts: "fonts"
   of apWindows: "window"
   of apDateTime: "datetime"
   of apSound: "sound"
   of apSaver: "saver"
   of apPrograms: "app"
-  of apAndroid: "terminal"
+  of apAndroid: "android"
+  of apInternational: "international"
   of apAbout: "logo"
 
 proc okCancel(): bool =
@@ -164,10 +208,19 @@ proc schemePreview(t: Theme) =
   text(b.x + (b.w - textWidth("OK")) div 2, b.y + (b.h - lineHeight()) div 2, "OK", t.text)
 
 proc colorDialog() =
-  dialog(showDialog, "Color", 420):
+  dialog(showDialog, "Color", 440):
     form 0:
       field "Color &Schemes:": combo(schemeNames(), scheme)
     schemePreview(schemeTheme(schemeNames()[clamp(scheme, 0, schemeNames().high)]))
+    group "Night colors":
+      checkbox("&Night colors (easier on the eyes in the dark)", night)
+      form 0:
+        field "Night &scheme:": combo(schemeNames(), nightScheme, enabled = night)
+        field "&From:":
+          row:
+            combo(hourNames(), nightFrom, w = dp(90), enabled = night)
+            label "To:"
+            combo(hourNames(), nightTo, w = dp(90), enabled = night)
     if okCancel(): saveAll()
 
 proc desktopDialog() =
@@ -205,13 +258,36 @@ proc desktopDialog() =
       discard
 
 proc fontsDialog() =
-  dialog(showDialog, "Fonts", 440):
+  dialog(showDialog, "Fonts", 480):
+    let mine = myFonts()
     form 0:
       field "&Font:":
         row:
           radio("Sans", fontKind, 0)
           radio("Serif", fontKind, 1)
           radio("Mono", fontKind, 2)
+          radio("A font of yours", fontKind, 3)
+      if fontKind == 3 or mine.len > 0:
+        field "&Your fonts:":
+          var names: seq[string]
+          for f in mine: names.add f.splitFile.name
+          fontSel = max(0, mine.find(fontFile))
+          if names.len == 0: label("(none yet: Add a Font...)", enabled = false)
+          elif listbox(names, fontSel, rows = min(5, names.len)):
+            fontFile = mine[fontSel]
+            fontKind = 3
+          if fontKind == 3 and fontFile.len == 0 and mine.len > 0: fontFile = mine[0]
+        field "":
+          row:
+            if button("&Add a Font..."):
+              newFont = ""
+              pickFont = true
+            if button("&Remove the Font", enabled = fontSel in 0 ..< mine.len):
+              try: removeFile(mine[fontSel]) except CatchableError: discard
+              if fontFile == mine[fontSel]:
+                fontFile = ""
+                if fontKind == 3: fontKind = 0
+              launch("fc-cache -f " & quoteShell(fontsFolder()))
       field "&Text size:":
         row([-1, 60]):
           slider(textPct, 75, 200, ticks = 5)
@@ -222,8 +298,19 @@ proc fontsDialog() =
           label $sizePct & " %"
     paragraph "\"Everything\" is the size of the windows' frames, buttons and text together: " &
       "100 % is the screen's own (from its density). Programs that are not the desktop's " &
-      "follow with Linux Programs on."
+      "follow with Linux Programs on. Fonts you add (.ttf, .otf) go to " & fontsFolder() &
+      ": every program can use them."
     if okCancel(): saveAll()
+  if pickFont:
+    if filePicker(pickFont, newFont, fmOpen, ["*.ttf", "*.otf", "*.TTF", "*.OTF"], "Add a Font"):
+      try:
+        createDir(fontsFolder())
+        let dest = fontsFolder() / newFont.extractFilename
+        copyFile(newFont, dest)
+        fontFile = dest
+        fontKind = 3
+        launch("fc-cache -f " & quoteShell(fontsFolder()))
+      except CatchableError: toast("The font could not be copied.", 3000)
 
 proc windowsDialog() =
   dialog(showDialog, "Windows", 460):
@@ -231,10 +318,16 @@ proc windowsDialog() =
       field "&Frames for fingers:": segmented(["Automatic", "On", "Off"], touch)
       field "Open &maximized:": segmented(["Automatic", "On", "Off"], maxNew)
     checkbox("&Pause programs while they are minimized", pauseIconic)
+    checkbox("Show the &panel (the programs and the windows at the bottom)", panelOn)
+    if inTermux():
+      checkbox("Android's &Back key closes the window in front", backKey)
     paragraph "Frames for fingers: taller title bars and wider borders; an icon opens with one " &
       "tap. Automatic: on in Termux. Open maximized: new windows fill the screen. " &
       "Automatic: on a phone's screen in Termux. A paused program takes no CPU and no " &
-      "battery until you bring it back -- music and downloads in it stop too."
+      "battery until you bring it back -- music and downloads in it stop too. The panel: " &
+      "a bar along the bottom with the Programs menu, a button for each window and the clock " &
+      "(3.1 had none: it came with 95; here in 3.1's colors). Back: Termux:X11 uses it for its " &
+      "keyboard unless its preferences give it to X."
     if okCancel(): saveAll()
 
 proc dateTimeDialog() =
@@ -333,6 +426,14 @@ proc androidDialog() =
       "for Esc, Ctrl, Alt and Tab; Fullscreen on."
     if okCancel(): saveAll()
 
+proc internationalDialog() =
+  dialog(showDialog, "International", 440):
+    form 0:
+      field "&Language:": combo(LanguageNames, language)
+    paragraph "The desktop's own programs, menus and dialogs in the language chosen (Arabic: " &
+      "right to left). Other programs keep their own language."
+    if okCancel(): saveAll()
+
 proc aboutDialog() =
   dialog(showDialog, "About " & DesktopName, 440):
     row:
@@ -357,6 +458,7 @@ proc runControl*() =
   followLook()
   applets = @[apColor, apDesktop, apFonts, apWindows, apDateTime, apSound, apSaver, apPrograms]
   if inTermux(): applets.add apAndroid
+  applets.add apInternational
   applets.add apAbout
   marked = newSeq[bool](applets.len)
   var showAboutCp = false
@@ -378,7 +480,7 @@ proc runControl*() =
         if menuItem("&About Control Panel..."): showAboutCp = true
     let px = devPx(32.0)
     let ev = iconView(applets.len,
-      proc (i: int): string = $applets[i],
+      proc (i: int): string = tr($applets[i]),
       proc (i: int; r: Rect) =
         let s = dp(32)
         drawBitmap(rect(r.x + (r.w - s) div 2, r.y + (r.h - s) div 2, s, s),
@@ -388,19 +490,20 @@ proc runControl*() =
       opened = sel
       readAll()
       showDialog = true
-    statusbar(if sel in 0 ..< applets.len:
+    statusbar(tr(if sel in 0 ..< applets.len:
                 (case applets[sel]
-                 of apColor: "The colors of the windows"
+                 of apColor: "The colors of the windows, by day and by night"
                  of apDesktop: "The desktop's color, pattern and wallpaper"
-                 of apFonts: "The font, the text size, the size of everything"
-                 of apWindows: "Frames for fingers; windows that open maximized"
+                 of apFonts: "The font (one of yours too), the text size, the size of everything"
+                 of apWindows: "Frames for fingers, the panel, windows that open maximized"
                  of apDateTime: "The clock's hours and the time zone"
                  of apSound: "The sounds of the desktop's events"
                  of apSaver: "A screen saver, after a while with nothing done"
                  of apPrograms: "The look GTK, Qt and other programs are given"
                  of apAndroid: "Keeping the desktop running on Android"
+                 of apInternational: "The language of the desktop's programs"
                  of apAbout: "About " & DesktopName)
-              else: "")
+              else: ""))
     if showDialog and opened in 0 ..< applets.len:
       case applets[opened]
       of apColor: colorDialog()
@@ -412,6 +515,7 @@ proc runControl*() =
       of apSaver: saverDialog()
       of apPrograms: programsDialog()
       of apAndroid: androidDialog()
+      of apInternational: internationalDialog()
       of apAbout: aboutDialog()
     aboutBox(showAboutCp, "Control Panel", DesktopVersion)
     endFrame()

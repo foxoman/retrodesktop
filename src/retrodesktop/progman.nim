@@ -7,9 +7,9 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils, tables, math]
+import std/[strutils, tables, math]
 import retroui
-import common, link, art, help
+import common, link, art, help, catalog, deskicons
 
 type
   Item = object
@@ -25,11 +25,6 @@ type
     win: MdiWindow
     sel: int
     marked: seq[bool]
-
-const
-  GroupOrder = ["Main", "Accessories", "Applications", "Internet", "Office", "Development",
-                "Graphics", "Multimedia", "System", "Games", "DOS", "StartUp"]
-
 
 var
   groups: seq[Group]
@@ -47,63 +42,6 @@ var
 
 proc builtin(name, command, art, comment: string): Item =
   Item(name: name, command: command, art: art, comment: comment, custom: -1)
-
-proc companionItem(name, exe, art, comment: string; list: var seq[Item]) =
-  ## A program that comes with the desktop, when it is installed.
-  let p = companion(exe)
-  if p.len > 0:
-    var it = builtin(name, quoteShell(p), art, comment)
-    it.icon = exe
-    list.add it
-
-proc pickExe(folder: string): string =
-  ## The program a DOS game's folder starts with: one named like the folder,
-  ## else its .BAT, else its largest .EXE (not SETUP or INSTALL).
-  var best = ""
-  var bestScore = -1
-  let stem = folder.extractFilename.toLowerAscii
-  for kind, path in walkDir(folder):
-    if kind notin {pcFile, pcLinkToFile}: continue
-    let (_, name, ext) = path.splitFile
-    let e = ext.toLowerAscii
-    if e notin [".exe", ".com", ".bat"]: continue
-    let n = name.toLowerAscii
-    if n in ["setup", "install", "uninst", "uninstal", "config", "setsound", "readme"]: continue
-    var score = int(min(getFileSize(path), 9_000_000) div 1000)
-    if n.len >= 3 and stem.startsWith(n[0 ..< min(n.len, 4)]): score += 50_000
-    if e == ".bat": score += 20_000
-    if score > bestScore:
-      bestScore = score
-      best = path
-  best
-
-proc dosItems(): seq[Item] =
-  ## DOSBox-X with ~/DOS as its drive C:, and a program for each game there
-  ## (a folder each, or a program at its top) -- when DOSBox-X is installed.
-  let box = findExe("dosbox-x")
-  if box.len == 0: return
-  let dir = dosDir()
-  try:
-    if not dirExists(dir):
-      createDir(dir)
-      writeFile(dir / "README.TXT", "Put your DOS games and programs here, a folder each. Program " &
-                "Manager's DOS group shows them, and DOSBox-X runs them with this folder as drive C:.\r\n")
-  except CatchableError: discard
-  proc run(rel: string): string =
-    result = quoteShell(box) & " -fastlaunch -c " & quoteShell("mount c \"" & dir & "\"") & " -c c:"
-    if rel.len > 0:
-      let folder = rel.parentDir
-      if folder.len > 0 and folder != ".": result &= " -c " & quoteShell("cd \\" & folder.replace("/", "\\"))
-      result &= " -c " & quoteShell(rel.extractFilename)
-  result.add builtin("DOSBox-X", run(""), "dos", "A DOS PC; the folder DOS in your home is its drive C:")
-  for kind, path in walkDir(dir):
-    if kind in {pcDir, pcLinkToDir}:
-      let exe = pickExe(path)
-      if exe.len > 0:
-        result.add builtin(path.extractFilename, run(exe.relativePath(dir)), "dos",
-                           "In DOSBox-X: " & exe.relativePath(dir))
-    elif path.splitFile.ext.toLowerAscii in [".exe", ".com", ".bat"]:
-      result.add builtin(path.splitFile.name, run(path.extractFilename), "dos", "In DOSBox-X")
 
 proc groupNamed(name: string): Group =
   for g in groups:
@@ -148,58 +86,12 @@ proc loadGroups() =
   ## user's own (the windows where they were).
   let before = groups
   groups = @[]
-  var main, acc: seq[Item]
-  companionItem("File Manager", "retro-files", "files", "Retro Files: folders and files", main)
-  main.add builtin("Control Panel", selfCommand("control"), "control",
-                   "Colors, fonts, sizes, the desktop")
-  main.add builtin("Task List", selfCommand("tasklist"), "tasklist",
-                   "The windows open, and the memory each takes")
-  main.add builtin("Terminal", selfCommand("terminal"), "terminal",
-                   "The shell's command line, in a PC's 16 text colors")
-  # (Retro Browser asks to install Firefox when it is not there)
-  main.add builtin("Web Browser", selfCommand("browser"), "browser",
-                   "Retro Browser: Firefox in the desktop's look, on a profile of its own")
-  main.add builtin("Setup", selfCommand("setup"), "setup",
-                   "Programs to install, from Termux's packages: browsers, office, games...")
-  if inTermux():
-    main.add builtin("Android Files", selfCommand("storage"), "storage",
-                     "Your phone's photos, downloads and documents, in File Manager")
-  main.add builtin("Read Me", "?help", "readme", "How the desktop works")
-  companionItem("Notepad", "retro-notepad", "notepad", "Text files", acc)
-  companionItem("Paintbrush", "retro-photo", "paint", "Retro Photo: pictures and painting", acc)
-  companionItem("Board", "retro-board", "board", "Retro Board: a whiteboard for drawings and notes", acc)
-  companionItem("Mail", "retro-mail", "mail", "Retro Mail", acc)
-  companionItem("Gallery", "retro-gallery", "gallery", "Retro Gallery: every control of Retro Nim UI", acc)
-  acc.add builtin("Write", selfCommand("write"), "write", "Documents with bold, italic, sizes and lists")
-  acc.add builtin("Clipboard Viewer", selfCommand("clipboard"), "clipboard", "What was copied last")
-  acc.add builtin("Calculator", selfCommand("calc"), "calc", "A calculator")
-  acc.add builtin("Calendar", selfCommand("calendar"), "calendar", "Days, with notes and appointments")
-  acc.add builtin("Cardfile", selfCommand("cardfile"), "cardfile", "Cards of names, numbers and notes")
-  acc.add builtin("Clock", selfCommand("clock"), "clock", "The time, on a face or in numbers")
-  groupNamed("Main").items = main
-  groupNamed("Accessories").items = acc
-  var games = @[
-    builtin("Minesweeper", selfCommand("mines"), "mines", "Find the mines without stepping on one"),
-    builtin("Solitaire", selfCommand("solitaire"), "cards", "Klondike, as 3.1 had it"),
-    builtin("Reversi", selfCommand("reversi"), "reversi", "Turn the computer's pieces over")]
-  # (Freedoom, once Setup put it here)
-  let doom = findExe("chocolate-doom")
-  let wads = gameDataDir("freedoom")
-  if doom.len > 0:
-    for (name, wad) in [("Freedoom", "freedoom1.wad"), ("Freedoom: Phase 2", "freedoom2.wad")]:
-      if fileExists(wads / wad):
-        games.add builtin(name, quoteShell(doom) & " -iwad " & quoteShell(wads / wad), "doom",
-                          "A free Doom, in Chocolate Doom")
-  groupNamed("Games").items = games
-  let dos = dosItems()
-  if dos.len > 0: groupNamed("DOS").items = dos
-  for e in installedApps():
-    groupNamed(groupOf(e)).items.add Item(name: e.name, command: e.command, comment: e.comment,
-                                          icon: e.icon, terminal: e.terminal, custom: -1)
+  for (name, items) in catalog():
+    let g = groupNamed(name)
+    for it in items:
+      g.items.add Item(name: it.name, command: it.command, comment: it.comment, art: it.art,
+                       icon: it.icon, terminal: it.terminal, custom: it.custom)
   discard groupNamed("StartUp")
-  for i, it in progItems():
-    groupNamed(if it.group.len > 0: it.group else: "Applications").items.add Item(
-      name: it.name, command: it.command, icon: it.icon, custom: i, art: (if it.icon.len == 0: "app" else: ""))
   # (in 3.1's order; the user's own groups after)
   var ordered: seq[Group]
   for n in GroupOrder:
@@ -247,7 +139,7 @@ proc groupView(g: Group) =
   let px = devPx(32.0)
   if g.marked.len != g.items.len: g.marked = newSeq[bool](g.items.len)
   let ev = iconView(g.items.len,
-    proc (i: int): string = g.items[i].name,
+    proc (i: int): string = tr(g.items[i].name),
     proc (i: int; r: Rect) =
       let s = dp(32)
       drawBitmap(rect(r.x + (r.w - s) div 2, r.y + (r.h - s) div 2, s, s), pictureOf(g.items[i], px)),
@@ -269,6 +161,13 @@ proc activeGroup(): Group =
   elif groups.len > 0: groups[0]
   else: nil
 
+proc toDesktop(it: Item) =
+  ## The program on the desktop, as an icon (a desktop entry in ~/Desktop).
+  var cmd = it.command
+  if cmd == "?help": cmd = selfCommand("help") & " desktop"
+  if putOnDesktop(it.name, cmd, it.art, it.icon, it.terminal):
+    toast(it.name & " is on the desktop.", 2500)
+
 proc menus() =
   let g = activeGroup()
   let hasItem = g != nil and g.sel in 0 ..< g.items.len
@@ -288,6 +187,7 @@ proc menus() =
         propsGroup = g
         propsIndex = g.sel
         showProps = true
+      if menuItem("Put on the Des&ktop", enabled = hasItem): toDesktop(g.items[g.sel])
       menuSeparator()
       if menuItem("&Run..."): launch(selfCommand("run"))
       menuSeparator()
@@ -325,6 +225,7 @@ proc menus() =
         propsGroup = g2
         propsIndex = g2.sel
         showProps = true
+      if menuItem("Put on the Des&ktop"): toDesktop(g2.items[g2.sel])
       if g2.items[g2.sel].custom >= 0:
         if menuItem("&Delete"): showDelete = true
 

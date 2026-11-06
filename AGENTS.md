@@ -16,12 +16,27 @@ alike.
   `terminal`, `browser`, `setup`, `write`, `clipboard`, `open`, `mines`,
   `solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`,
   `help`, `tour`, `storage`, `notify`, `sound`, `clock`, `calc`, `calendar`,
-  `cardfile`).
+  `cardfile`, `charmap`, `pictures`, `pdf`, `media`, `recorder`, `camera`,
+  `dialer`, `news`, `diskspace`, `share`).
 - `src/retrodesktop/`:
   - `wm.nim` -- the window manager (frames, focus, keys, EWMH/ICCCM), on the
     desktop's X connection through Retro Nim UI's `x11EventHook`
   - `session.nim` -- the desktop: background, icons, menu, welcome, exit,
-    memory
+    memory, night colors
+  - `panel.nim` -- the panel: Programs, the windows' buttons, the clock
+    (an override-redirect window the manager keeps on top, `wm.onTop`, and
+    leaves room for, `wm.workBottom`)
+  - `deskicons.nim` -- the icons of the Desktop folder on the desktop
+  - `catalog.nim` -- every program in its group, for Program Manager and
+    the panel (the desktop's own, DOS, Android, installed, the user's)
+  - `charmap.nim`, `viewers.nim` (Picture Viewer, PDF Reader, Camera),
+    `players.nim` (Media Player, Sound Recorder), `phone.nim` (Phone
+    Dialer), `utilities.nim` (Disk Space, News Reader, Share Desktop) --
+    the new accessories
+  - `tasks.nim` -- a command run in the background, its output read
+    without blocking a frame (Termux:API, apt-get clean...)
+  - `ar.nim` -- the desktop's words in Arabic (with retroui's
+    `toolkitArabic`; `tr` finds them)
   - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
     Cardfile), `control.nim`, `tasklist.nim`, `terminal.nim` -- the programs
   - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing
@@ -42,7 +57,9 @@ alike.
     resources, fontconfig, the GTK theme)
   - `link.nim` -- how the programs talk to the desktop (EWMH messages,
     _RETRO_DESKTOP, following the look)
-  - `common.nim` -- settings, starting programs, desktop entries, icons
+  - `common.nim` -- settings, starting programs, desktop entries, icons,
+    the look of now (`currentScheme`: night colors), the language, a
+    font file
   - `art.nim` -- the desktop's own icons and patterns, drawn at their size
   - `xlib.nim` -- the Xlib it uses, loaded at run time
 - `tools/build-deb.sh` (the Termux package), `tools/termux-cc.sh` (the

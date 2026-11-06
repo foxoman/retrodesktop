@@ -347,6 +347,219 @@ proc drawIcon(c: Canvas2D; kind: string) =
     c.fillRect(15, 11, 2, 2)
     box(c, 11, 24, 10, 3, Gray)
     box(c, 6, 27, 20, 3, Gray)
+  of "charmap":
+    # (a grid of letters, one of them larger)
+    box(c, 2, 4, 28, 24, White)
+    c.strokeStyle = Gray
+    c.lineWidth = 1
+    for k in 1 .. 3:
+      c.beginPath(); c.moveTo(2 + float(k) * 7, 4); c.lineTo(2 + float(k) * 7, 28); c.stroke()
+      c.beginPath(); c.moveTo(2, 4 + float(k) * 6); c.lineTo(30, 4 + float(k) * 6); c.stroke()
+    c.fillStyle = Black
+    c.font = "4.5px serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    for (x, y, s) in [(5.5, 7.0, "A"), (12.5, 7.0, "&"), (26.5, 7.0, "$"), (5.5, 13.0, "€"),
+                      (5.5, 19.0, "Ω"), (26.5, 25.0, "#"), (12.5, 25.0, "@")]:
+      c.fillText(s, x, y)
+    box(c, 13, 9, 15, 15, White, Navy)
+    c.fillStyle = Navy
+    c.font = "bold 12px serif"
+    c.fillText("ß", 20.5, 17)
+  of "pictures":
+    # (a framed picture: the hills, the sun)
+    box(c, 2, 5, 28, 23, "#c08040")
+    box(c, 5, 8, 22, 17, Cyan)
+    c.fillStyle = Green
+    c.beginPath(); c.moveTo(5.5, 24.5); c.lineTo(12, 15); c.lineTo(17, 21); c.lineTo(21, 17)
+    c.lineTo(26.5, 24.5); c.closePath(); c.fill()
+    c.fillStyle = Yellow
+    c.beginPath(); c.arc(21, 12, 2.5, 0, 2 * PI); c.fill()
+  of "pdf":
+    box(c, 6, 3, 20, 27, White)
+    c.fillStyle = Dark
+    for r in 0 .. 3: c.fillRect(9, 6 + float(r) * 3, 14, 1)
+    box(c, 3, 18, 22, 9, Red)
+    c.fillStyle = White
+    c.font = "bold 7px sans-serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("PDF", 14, 22.8)
+  of "media":
+    # (a film strip and the play sign)
+    box(c, 2, 6, 28, 20, Black)
+    c.fillStyle = White
+    for k in 0 ..< 7:
+      c.fillRect(4 + float(k) * 3.8, 7.5, 2, 2)
+      c.fillRect(4 + float(k) * 3.8, 22.5, 2, 2)
+    c.fillStyle = Navy
+    c.fillRect(3, 11, 26, 10)
+    c.fillStyle = Yellow
+    c.beginPath(); c.moveTo(13, 12); c.lineTo(21, 16); c.lineTo(13, 20); c.closePath(); c.fill()
+  of "recorder":
+    # (a microphone on its stand)
+    c.fillStyle = Dark
+    box(c, 11, 2, 10, 15, Dark)
+    c.fillStyle = Gray
+    for r in 0 .. 3: c.fillRect(12, 4 + float(r) * 3, 8, 1)
+    c.strokeStyle = Black
+    c.lineWidth = 1.6
+    c.beginPath(); c.arc(16, 13, 8, 0, PI); c.stroke()
+    c.beginPath(); c.moveTo(16, 21); c.lineTo(16, 27); c.stroke()
+    box(c, 9, 27, 14, 3, Black)
+    c.fillStyle = Red
+    c.beginPath(); c.arc(26, 5, 3, 0, 2 * PI); c.fill()
+  of "camera":
+    box(c, 2, 9, 28, 19, Dark)
+    box(c, 10, 5, 12, 5, Dark)
+    c.fillStyle = Black
+    c.beginPath(); c.arc(16, 18, 7, 0, 2 * PI); c.fill()
+    c.fillStyle = "#4060c0"
+    c.beginPath(); c.arc(16, 18, 5, 0, 2 * PI); c.fill()
+    c.fillStyle = White
+    c.beginPath(); c.arc(14, 16, 1.5, 0, 2 * PI); c.fill()
+    c.fillStyle = Yellow
+    c.fillRect(24, 11, 4, 2)
+  of "dialer":
+    # (a telephone of the time: the handset over the dial)
+    box(c, 4, 14, 24, 15, "#c00000")
+    c.fillStyle = White
+    c.beginPath(); c.arc(16, 22, 5.5, 0, 2 * PI); c.fill()
+    c.fillStyle = Black
+    for k in 0 ..< 8:
+      let a = float(k) * PI / 4
+      c.beginPath(); c.arc(16 + cos(a) * 3.6, 22 + sin(a) * 3.6, 0.9, 0, 2 * PI); c.fill()
+    c.fillStyle = "#800000"
+    c.beginPath(); c.moveTo(3, 12); c.lineTo(8, 7); c.lineTo(24, 7); c.lineTo(29, 12); c.lineTo(25, 13)
+    c.lineTo(22, 10); c.lineTo(10, 10); c.lineTo(7, 13); c.closePath(); c.fill()
+    c.strokeStyle = Black
+    c.lineWidth = 1
+    c.stroke()
+  of "news":
+    # (a newspaper, folded)
+    box(c, 3, 5, 26, 22, White)
+    c.fillStyle = Black
+    c.font = "bold 6px serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("NEWS", 16, 9)
+    c.fillRect(5, 12, 22, 1)
+    box(c, 5, 14, 9, 7, Gray)
+    c.fillStyle = Dark
+    for r in 0 .. 3: c.fillRect(16, 14 + float(r) * 2.5, 11, 1)
+    for r in 0 .. 1: c.fillRect(5, 23 + float(r) * 2, 22, 1)
+    c.fillStyle = "#ff8000"
+    c.beginPath(); c.arc(27, 6, 3.5, 0, 2 * PI); c.fill()
+    c.fillStyle = White
+    c.beginPath(); c.arc(26, 7, 0.9, 0, 2 * PI); c.fill()
+  of "diskspace":
+    # (a pie: how full)
+    c.fillStyle = "#00c0c0"
+    c.beginPath(); c.arc(16, 16, 13, 0, 2 * PI); c.fill()
+    c.fillStyle = Navy
+    c.beginPath(); c.moveTo(16, 16); c.arc(16, 16, 13, -PI / 2, PI * 0.9); c.closePath(); c.fill()
+    c.fillStyle = "#ff00ff"
+    c.beginPath(); c.moveTo(16, 16); c.arc(16, 16, 13, PI * 0.9, PI * 1.25); c.closePath(); c.fill()
+    c.strokeStyle = Black
+    c.lineWidth = 1
+    c.beginPath(); c.arc(16, 16, 13, 0, 2 * PI); c.stroke()
+  of "share":
+    # (two screens and the line between them)
+    box(c, 1, 4, 16, 12, Gray)
+    c.fillStyle = TealC
+    c.fillRect(3, 6, 12, 8)
+    box(c, 15, 16, 16, 12, Gray)
+    c.fillStyle = TealC
+    c.fillRect(17, 18, 12, 8)
+    c.strokeStyle = Red
+    c.lineWidth = 1.6
+    c.beginPath(); c.moveTo(9, 17); c.lineTo(9, 22); c.lineTo(14, 22); c.stroke()
+    c.beginPath(); c.moveTo(12, 20); c.lineTo(14.5, 22); c.lineTo(12, 24); c.stroke()
+  of "communicator":
+    # (two who talk: their heads, a word between them)
+    for (x, col) in [(9.0, "#00a000"), (23.0, "#ffa000")]:
+      c.fillStyle = col
+      c.beginPath(); c.arc(x, 19, 4.5, 0, 2 * PI); c.fill()
+      c.beginPath(); c.arc(x, 31, 8, PI, 2 * PI); c.fill()
+      c.strokeStyle = Black
+      c.lineWidth = 1
+      c.beginPath(); c.arc(x, 19, 4.5, 0, 2 * PI); c.stroke()
+    box(c, 6, 2, 20, 10, White)
+    c.fillStyle = White
+    c.beginPath(); c.moveTo(13, 11); c.lineTo(15, 14.5); c.lineTo(17, 11); c.closePath(); c.fill()
+    c.fillStyle = Navy
+    for k in 0 .. 2: c.fillRect(10 + float(k) * 4.5, 6, 3, 2)
+  of "android":
+    # (a phone, its screen of apps)
+    box(c, 8, 2, 16, 28, Black)
+    c.fillStyle = "#3ddc84"
+    c.fillRect(10, 5, 12, 21)
+    c.fillStyle = White
+    for r in 0 .. 2:
+      for k in 0 .. 1: c.fillRect(11.5 + float(k) * 5, 7 + float(r) * 6, 4, 4)
+    c.fillStyle = Gray
+    c.fillRect(14, 27, 4, 1.5)
+  of "folder":
+    c.fillStyle = Black
+    box(c, 3, 7, 12, 5, Yellow)
+    box(c, 3, 10, 26, 18, Yellow)
+    c.fillStyle = "#ffffa0"
+    c.fillRect(4, 11, 24, 2)
+  of "file":
+    c.fillStyle = White
+    c.beginPath(); c.moveTo(7, 3); c.lineTo(20, 3); c.lineTo(26, 9); c.lineTo(26, 29); c.lineTo(7, 29)
+    c.closePath(); c.fill()
+    c.strokeStyle = Black
+    c.lineWidth = 1
+    c.stroke()
+    c.beginPath(); c.moveTo(20, 3); c.lineTo(20, 9); c.lineTo(26, 9); c.stroke()
+    c.fillStyle = Dark
+    for r in 0 .. 4: c.fillRect(10, 13 + float(r) * 3, 13, 1)
+  of "panel":
+    # (a screen with the panel along its bottom)
+    box(c, 2, 4, 28, 22, TealC)
+    box(c, 2, 21, 28, 5, Gray)
+    box(c, 3, 22, 6, 3, Gray)
+    c.fillStyle = Navy
+    c.fillRect(10, 22.5, 7, 2)
+    c.fillStyle = Black
+    c.fillRect(25, 23, 4, 1)
+    box(c, 11, 26, 10, 2, Gray)
+    box(c, 7, 28, 18, 2, Gray)
+  of "night":
+    box(c, 2, 2, 28, 28, Navy)
+    c.fillStyle = Yellow
+    c.beginPath(); c.arc(14, 14, 8, 0, 2 * PI); c.fill()
+    c.fillStyle = Navy
+    c.beginPath(); c.arc(18, 11, 7, 0, 2 * PI); c.fill()
+    c.fillStyle = White
+    for (x, y) in [(24.0, 20.0), (8.0, 25.0), (25.0, 6.0)]: c.fillRect(x, y, 1.5, 1.5)
+  of "fonts":
+    box(c, 3, 3, 26, 26, White)
+    c.fillStyle = Navy
+    c.font = "bold 16px serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("A", 12, 15)
+    c.fillStyle = Red
+    c.font = "italic 13px sans-serif"
+    c.fillText("a", 22, 21)
+  of "international":
+    # (a globe and an Arabic letter beside an A)
+    c.fillStyle = "#0080ff"
+    c.beginPath(); c.arc(16, 16, 13, 0, 2 * PI); c.fill()
+    c.strokeStyle = White
+    c.lineWidth = 0.8
+    c.beginPath(); c.moveTo(3, 16); c.lineTo(29, 16); c.stroke()
+    c.beginPath(); c.arc(16, 16, 6, 0, 2 * PI); c.stroke()
+    box(c, 4, 8, 11, 11, White)
+    box(c, 17, 13, 11, 11, White)
+    c.fillStyle = Black
+    c.font = "bold 8px sans-serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("A", 9.5, 13.8)
+    c.fillText("ع", 22.5, 18.5)
   of "logo":
     # (Retro Desktop's: a screen with a setting sun over the sea)
     box(c, 2, 3, 28, 21, Gray)

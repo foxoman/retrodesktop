@@ -9,7 +9,7 @@
 import std/[os, strutils, tables, math, times, posix]
 import retroui
 import retroui/uirelays/drivers/x11_driver
-import xlib, common, theming, wm, link, art, boxes, opener, saver, sounds
+import xlib, common, theming, wm, link, art, boxes, opener, saver, sounds, panel, deskicons, catalog
 
 var
   conf: Settings
@@ -61,14 +61,21 @@ proc readSettings() =
   touchMode = conf.onOff("touch", inTermux())
   wm.bigFrames = touchMode
   wm.maximizeNew = conf.onOff("maximizeNew", inTermux() and phoneScreen())
+  wm.setBackCloses(conf.setting("backKey", "off") == "on")
 
 proc useGpu()
+
+var schemeNow = ""               # the color scheme in use (night colors change it)
 
 proc relook() =
   ## The settings changed (Control Panel): the desktop, its frames and the
   ## other programs take them.
   readSettings()
+  schemeNow = currentScheme(conf)
   useGpu()
+  if managing:
+    showPanel(conf.setting("panel", "on") != "off")
+    panelSettings(true, conf.setting("clock24", "on") != "off")
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -91,9 +98,11 @@ proc wakeLock(on: bool) =
 const
   SessionSettings = "retrodesktop-session"
   NotAgain = ["", "session", "desktop", "progman", "tasklist", "run", "about", "exit",
-              "welcome", "setup", "open", "saver", "help", "tour", "notify", "storage", "sound"]
+              "welcome", "setup", "open", "saver", "help", "tour", "notify", "storage", "sound",
+              "camera", "dialer", "recorder", "share"]
     ## (the desktop's own parts that are not opened again: Program Manager
-    ## starts by itself, the rest are dialogs)
+    ## starts by itself, the rest are dialogs, or ask Android for the
+    ## camera, the phone, the microphone, or share the screen)
 
 var
   commands: Table[int, string]   # a process's command line, to start it again ("" not)
@@ -365,7 +374,8 @@ proc iconMenu(c: Client; x, y: int; above = false) =
 
 proc drawIcons() =
   ## The windows minimized, as icons along the bottom, left to right, rows
-  ## going up as they fill.
+  ## going up as they fill (with the panel shown: on the panel instead).
+  if conf.setting("panel", "on") != "off" and managing: return
   let list = iconicClients()
   if list.len == 0:
     iconSel = -1
@@ -417,6 +427,7 @@ proc desktopMenuItems(): seq[wm.MenuItem] =
     wm.menuItem("&Tile", "", true, proc () = wm.tile()),
     wm.menuItem("&Arrange Icons", "", true, proc () =
       iconSel = -1
+      arrangeDeskIcons()
       x11Wake()),
     wm.menuLine(),
     wm.menuItem("&About Retro Desktop...", "", true, proc () = launch(selfCommand("about"))),
@@ -492,6 +503,7 @@ proc watchIdle() =
 proc watchMemory() =
   onMemoryPressure(proc (level: MemoryPressure) =
     forgetIcons()
+    forgetDeskIcons()
     tile = nil
     wallTile = nil
     if level == mpCritical:
@@ -624,8 +636,14 @@ proc runSession*() =
       if line.strip.len > 0: discard posix.kill(Pid(parseInt(line.strip)), SIGCONT)
     removeFile(wm.pausedFile)
   except CatchableError: discard
+  schemeNow = currentScheme(conf)
+  # (the Android apps, for Program Manager's Android group: asked in the background)
+  lookForAndroidApps()
   managing = wm.start()
   if not managing: showNoWm = true
+  else:
+    showPanel(conf.setting("panel", "on") != "off")
+    panelSettings(true, conf.setting("clock24", "on") != "off")
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -652,6 +670,7 @@ proc runSession*() =
       startPrograms()
     if started and not restStarted: startRest()
     drawBackground()
+    drawDeskIcons(touchMode)
     drawIcons()
     desktopMenu()
     dialogs()
@@ -663,6 +682,9 @@ proc runSession*() =
       discard memoryPressure()
       if started: keepSession()
       watchIdle()
+      panelTick()
+      # (night colors: the night's scheme from its hour, the day's after)
+      if currentScheme(conf) != schemeNow: relook()
       wakeIn(5000)
     endFrame()
   if managing: wm.stop()

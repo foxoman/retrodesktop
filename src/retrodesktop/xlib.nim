@@ -318,6 +318,7 @@ proc XUngrabButton*(d: Display; button, modifiers: cuint; w: Window): cint
 proc XAllowEvents*(d: Display; mode: cint; time: Time): cint
 proc XGrabKey*(d: Display; keycode: cint; modifiers: cuint; w: Window; ownerEvents: XBool;
                pointerMode, keyboardMode: cint): cint
+proc XUngrabKey*(d: Display; keycode: cint; modifiers: cuint; w: Window): cint
 proc XKeysymToKeycode*(d: Display; keysym: culong): uint8
 proc XLookupKeysym*(e: ptr XKeyEvent; index: cint): culong
 proc XQueryKeymap*(d: Display; keys: ptr array[32, char]): cint

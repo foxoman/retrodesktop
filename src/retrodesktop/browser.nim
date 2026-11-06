@@ -169,7 +169,7 @@ proc writeProfile*() =
   ## shown the first time.
   let dir = profileDir()
   createDir(dir / "chrome")
-  let t = schemeTheme(desktopSettings().setting("scheme", "Classic"))
+  let t = schemeTheme(currentScheme(desktopSettings()))
   writeFile(dir / "chrome" / "userChrome.css", userChrome(t))
   # (the pages' scroll bars in the scheme's grays, where a page sets none)
   writeFile(dir / "chrome" / "userContent.css",

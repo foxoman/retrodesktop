@@ -8,7 +8,8 @@
 
 import std/[os, strutils]
 import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal,
-                     browser, setup, boxes, games, write, clipboard, opener, saver, sounds, help]
+                     browser, setup, boxes, games, write, clipboard, opener, saver, sounds, help,
+                     charmap, viewers, players, phone, utilities]
 
 proc usage() =
   echo DesktopName, " ", DesktopVersion, " -- a Windows 3.1 style desktop"
@@ -28,6 +29,16 @@ proc usage() =
   echo "  retro-desktop calc        Calculator"
   echo "  retro-desktop calendar    Calendar"
   echo "  retro-desktop cardfile    Cardfile"
+  echo "  retro-desktop charmap     Character Map"
+  echo "  retro-desktop pictures    Picture Viewer (pictures or a folder after it)"
+  echo "  retro-desktop pdf         PDF Reader (a PDF after it)"
+  echo "  retro-desktop media       Media Player (songs or videos after it)"
+  echo "  retro-desktop recorder    Sound Recorder"
+  echo "  retro-desktop camera      Camera (Termux:API)"
+  echo "  retro-desktop dialer      Phone Dialer (Termux:API)"
+  echo "  retro-desktop news        News Reader"
+  echo "  retro-desktop diskspace   Disk Space"
+  echo "  retro-desktop share       Share Desktop (VNC)"
 
 when isMainModule:
   let role = if paramCount() >= 1: paramStr(1).toLowerAscii else: ""
@@ -77,6 +88,25 @@ when isMainModule:
     if paramCount() >= 2: playSound(paramStr(2))
   of "help": runHelp(if paramCount() >= 2: paramStr(2) else: "contents")
   of "tour": runTour()
+  of "charmap": runCharmap()
+  of "pictures":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runPictures(args)
+  of "pdf":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runPdf(args)
+  of "camera": runCamera()
+  of "media":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runMedia(args)
+  of "recorder": runRecorder()
+  of "dialer": runDialer()
+  of "news": runNews()
+  of "diskspace", "disk": runDiskSpace()
+  of "share": runShare()
   of "run": runRunBox()
   of "about": runAboutBox()
   of "exit": runExitBox()

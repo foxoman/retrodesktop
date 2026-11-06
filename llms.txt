@@ -14,12 +14,17 @@ install or remove, apt-get underneath), `write` (Write), `clipboard`
 (Clipboard Viewer), `open FILE` (a file or link in its program), `mines`,
 `solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`, `help
 [topic]`, `tour`, `storage` (Android Files), `notify` (as notify-send),
-`sound EVENT`, `clock`, `calc`, `calendar`, `cardfile`.
+`sound EVENT`, `clock`, `calc`, `calendar`, `cardfile`, `charmap`,
+`pictures`, `pdf`, `media`, `recorder`, `camera`, `dialer` (Termux:API),
+`news`, `diskspace`, `share` (x11vnc). The desktop has a panel (Programs,
+the windows, the clock) and the Desktop folder's icons.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
-- Build: `nimble build -d:release` (needs retroui >= 0.20.8); the Termux
-  package: `sh tools/build-deb.sh`.
+- Build: `nimble build -d:release` (needs retroui >= 0.21.0); the Termux
+  package: `sh tools/build-deb.sh` (with Retro Nim UI's Files, Board, Photo,
+  Notepad, Mail and Communicator; Mail's app IDs from RETRO_MAIL_* in the
+  environment while it builds).
 - The window manager runs on the desktop's own X connection (retroui's
   `x11EventHook`); frames are X windows with title bars drawn by retroui's
   canvas.
@@ -31,9 +36,17 @@ install or remove, apt-get underneath), `write` (Write), `clipboard`
   ends it at once (`_exit`), and a new start ends a desktop that does not
   answer the ping and takes its windows.
 - Settings: retroui's `loadSettings("retrodesktop")` (scheme, desktopColor,
-  pattern, wallpaper, wallpaperMode, font, textScale, size, touch,
-  maximizeNew, linuxLook, wakeLock, startProgman); Program Manager's
-  items and windows in "retrodesktop-progman".
+  pattern, wallpaper, wallpaperMode, font, fontFile, textScale, size, touch,
+  maximizeNew, linuxLook, wakeLock, startProgman, panel, backKey, night,
+  nightFrom, nightTo, nightScheme, language, feeds, vncPassword); Program
+  Manager's items and windows in "retrodesktop-progman"; the desktop
+  icons' places in "retrodesktop-icons".
+- The panel: `panel.nim`, an override-redirect window; the manager keeps it
+  over the windows (`wm.onTop`), leaves its height free (`wm.workBottom`,
+  `workArea()`), gives it its events (`wm.otherEvents`) and redraws it
+  when the windows change (`wm.refresh`).
+- Arabic: `ar.nim`'s `desktopArabic` with retroui's `toolkitArabic`
+  (`setUiLanguage`); the manager draws titles and menus through `tr`.
 - Programs talk to the desktop with ClientMessages on the root window:
   `_RETRO_DESKTOP` (1 cascade, 2 tile, 3 arrange icons, 4 the look changed,
   5 exit, 6 ask to exit, 7 ping: the answer goes in the root's

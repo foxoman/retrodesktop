@@ -6,11 +6,12 @@
 
 import std/[os, strutils, tables, algorithm, math, times, hashes]
 import retroui
-import retroui/[svgimport, imaging]
+import retroui/[svgimport, imaging, lang_ar]
+import ar
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.6"
+  DesktopVersion* = "0.1.7"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -101,16 +102,62 @@ proc schemeTheme*(name: string): Theme =
     if cmpIgnoreCase(t.name, name) == 0: return t.theme
   Classic
 
+proc nightNow*(s: Settings): bool =
+  ## Night colors are on, and it is night now (between the hours Control
+  ## Panel's Color set).
+  if s.setting("night", "off") != "on": return false
+  var a, b = 0
+  try:
+    a = parseInt(s.setting("nightFrom", "19"))
+    b = parseInt(s.setting("nightTo", "7"))
+  except ValueError: return false
+  let h = now().hour
+  if a == b: false
+  elif a < b: h >= a and h < b
+  else: h >= a or h < b
+
+proc currentScheme*(s: Settings): string =
+  ## The color scheme of now: the night's at night (night colors on), else
+  ## the day's.
+  if nightNow(s): s.setting("nightScheme", "Dark") else: s.setting("scheme", "Classic")
+
+var
+  fontFileLoaded = ""            # (the font file the UI's text is in, "" none)
+  languageSet = "-"
+
+proc fontsFolder*(): string =
+  ## Where fonts of your own go (fontconfig finds them there).
+  let x = getEnv("XDG_DATA_HOME")
+  (if x.len > 0: x else: getHomeDir() / ".local" / "share") / "fonts"
+
+proc applyLanguage*(lang: string) =
+  ## The interface's language: "ar" Arabic (right to left), else English.
+  if lang == languageSet: return
+  languageSet = lang
+  if lang == "ar": setUiLanguage("ar", @toolkitArabic, @desktopArabic)
+  else: setUiLanguage("")
+
 proc applyDesktopLook*() =
   ## The color scheme, font and text size Control Panel set, for one of the
   ## desktop's own programs.
   let s = desktopSettings()
   # (the cursors in the classic shapes, at the screen's size)
   x11DrawnCursors = 1
-  ui.theme = schemeTheme(s.setting("scheme", "Classic"))
+  ui.theme = schemeTheme(currentScheme(s))
+  applyLanguage(s.setting("language", "en"))
   case s.setting("font", "sans")
   of "serif": setUiFont(ufSerif)
   of "mono": setUiFont(ufMono)
+  of "file":
+    let f = s.setting("fontFile", "")
+    if f.len > 0 and f == fontFileLoaded: setUiFont(ufFile)
+    else:
+      try:
+        setUiFontFile(readFile(f))
+        fontFileLoaded = f
+      except CatchableError, Defect:
+        fontFileLoaded = ""
+        setUiFont(ufSans)
   else: setUiFont(ufSans)
   # (the sizes only once Control Panel set them: until then the screen's own,
   # and what RETRO_SCALE or Ctrl + and - say)

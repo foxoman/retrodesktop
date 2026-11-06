@@ -287,7 +287,7 @@ proc childEnvironment*() =
   if not existsEnv("QT_QPA_PLATFORMTHEME"): putEnv("QT_QPA_PLATFORMTHEME", "gtk3")
   putEnv("XCURSOR_SIZE", $cursorSize())
   putEnv("XCURSOR_THEME", CursorTheme)
-  putEnv("RETRO_THEME", desktopSettings().setting("scheme", "Classic"))
+  putEnv("RETRO_THEME", currentScheme(desktopSettings()))
 
 proc ownResources*(d: Display): bool =
   ## The X resources on the screen are the ones the desktop put there (a
@@ -387,7 +387,7 @@ proc startXSettings*(d: Display) =
 
 proc applyLook*(d: Display) =
   ## Everything above, for the color scheme, fonts and size the settings say.
-  let t = schemeTheme(desktopSettings().setting("scheme", "Classic"))
+  let t = schemeTheme(currentScheme(desktopSettings()))
   installCursors()
   if desktopSettings().setting("linuxLook", "on") == "on":
     installFonts()

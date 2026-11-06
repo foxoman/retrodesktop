@@ -15,20 +15,32 @@ one program of about 5 MB, nothing to set up.
 - **The window manager.** Every program's window gets the 3.1 frame: the
   title bar to move it by, the border and the corners to size it by, the
   control-menu box (Restore, Minimize, Maximize, Close, Switch To), the
-  minimize and maximize buttons. Minimized windows are icons along the
-  bottom of the desktop. Click to bring a window to the front; Alt+Tab
+  minimize and maximize buttons. Minimized windows are buttons on the
+  panel (or, with the panel off, icons along the bottom of the desktop, as
+  3.1 had them). Click to bring a window to the front; Alt+Tab
   shows 3.1's box with the next window while Alt is held; Alt+F4 closes
   one. Windows snap to the screen's edges and to each other as you move
   them. Dialogs open over their windows, programs that go full screen
   (videos, games) get the whole screen, and the windows follow when the
   tablet turns. The programs open when the desktop ended -- you exited, or
   Android stopped Termux -- open again where they were the next time.
+- **The panel**, along the bottom: Windows 95's idea in 3.1's colors --
+  **Programs** with every group of Program Manager as a menu (and Run,
+  Help, Control Panel, Task List, Exit), a button for each window, the
+  battery and the clock. Control Panel > Windows turns it off.
+- **Icons on the desktop:** what is in your Desktop folder -- folders,
+  files, programs -- where you drag them; Program Manager's File > Put on
+  the Desktop makes a program's icon.
+
+  ![The panel, the desktop's icons and the new accessories](docs/panel.png)
+
 - **Program Manager**, with the groups 3.1 had -- Main, Accessories,
   StartUp -- and a group for each kind of program you install: Internet,
   Office, Development, Graphics, Multimedia, System, Games. Every program
   installed with a desktop entry is there by itself (Firefox, VS Code,
   GIMP, LibreOffice...). File > New puts in programs of your own; StartUp
-  starts them with the desktop.
+  starts them with the desktop. The **Android** group has the apps on your
+  phone (a double click opens one on Android).
 - **Setup**, as 3.1's: the blue screen, the programs to choose (browsers,
   office, development, graphics, music and video, games, fonts), the space
   they need and the space there is, a gauge while they go in -- and
@@ -55,7 +67,12 @@ one program of about 5 MB, nothing to set up.
   clipboard, with Termux:API), Task List (Ctrl+Esc: every window and the
   memory its program takes; End Task ends one that hangs), Control Panel
   (with Date/Time and the screen savers: Blank Screen, Starfield, Mystify,
-  Marquee).
+  Marquee), Character Map, Picture Viewer (thumbnails, a slide show, set as
+  wallpaper, send to Android), PDF Reader, Media Player (mpv underneath),
+  Sound Recorder, News Reader (RSS and Atom), Disk Space (what fills the
+  storage), Share Desktop (this desktop on a computer, through VNC), and on
+  a phone, with Termux:API, Camera and Phone Dialer (calls, contacts, the
+  messages as conversations, the call log). Write and Notepad print to PDF.
 - **The games:** Minesweeper, Solitaire (Klondike, the bouncing cards
   when you win) and Reversi, drawn for a mouse and for a finger; Freedoom
   (a free Doom, from Setup); and a **DOS** group: install DOSBox-X with
@@ -69,7 +86,9 @@ one program of about 5 MB, nothing to set up.
   pixel-art wallpapers (Bricks, Tartan, Argyle, Circuit, Starry Night,
   Waves, Checkers, Marble, Sunset) and more color schemes (Emerald City,
   Rose, Slate, Bordeaux, Canyon, Tweed, Leather, Neon, and Sunlight for a
-  phone outdoors, beside Hot Dog and the rest).
+  phone outdoors, beside Hot Dog and the rest); night colors -- another
+  scheme between the hours you choose; fonts of your own (Control Panel >
+  Fonts > Add a Font).
 
   ![The desktop's wallpapers](docs/wallpapers.png)
 
@@ -81,7 +100,16 @@ one program of about 5 MB, nothing to set up.
   the one you chose ("Always use this program"), else the one that says it
   takes it, else the Open With box (in Termux, an Android app too).
 - **From Retro Nim UI's examples:** File Manager (Retro Files), Paintbrush
-  (Retro Photo), Board (Retro Board), Notepad.
+  (Retro Photo), Board (Retro Board), Notepad, Mail (Retro Mail: Microsoft
+  365, Outlook.com, Gmail) and Communicator (Retro Communicator: chat on
+  XMPP -- an account on any public server, made from inside it if you
+  like; friends, groups, rooms, away messages, files).
+
+  ![Communicator](docs/communicator.png)
+
+- **English or Arabic:** Control Panel > International puts the desktop's
+  programs, its menus, the panel and the frames' titles in Arabic, right to
+  left.
 - **The same look for the other programs.** GTK programs (and Chromium,
   Electron, Firefox) get the color scheme as a "Retro31" GTK theme with
   3.1 scroll bars (always there, with arrows), the 3.1 cursors at the
@@ -105,8 +133,9 @@ one program of about 5 MB, nothing to set up.
   can draw on Android's GPU (Setup > System > 3D graphics: VirGL; the
   desktop starts its server).
 - **Android:** Main > Android Files shows the phone's photos, downloads
-  and documents (it asks Android the first time); Android's Back closes the
-  window in front (when Termux:X11 sends it as Back); programs'
+  and documents (it asks Android the first time); Android's Back can close
+  the window in front (Control Panel > Windows; off at first, because
+  Termux:X11 uses Back for its keyboard); programs'
   notifications (`notify-send`) become Android notifications with
   Termux:API, or a box at the bottom of the screen.
 
@@ -121,7 +150,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.6_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.7_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -169,7 +198,7 @@ issue. `pkill retro-desktop` ends the desktop and all its programs.
 | Alt+Esc | minimizes it |
 | Ctrl+Esc | Task List |
 | F1 | Help, at the page of the program in front |
-| Android's Back | closes the window in front |
+| Android's Back | closes the window in front (when Control Panel > Windows says so) |
 | Ctrl+Shift+C, Ctrl+Shift+V | copy and paste in the Terminal |
 | Shift+PgUp, Shift+PgDn | the Terminal's scrollback |
 
@@ -189,7 +218,9 @@ one program at once), `write` (a document after it), `open` (a file or a
 link, in its program), `clipboard`, `mines`, `solitaire`, `reversi`,
 `run`, `help` (a topic after it), `tour`, `storage` (Android Files), `notify`
 (as `notify-send`), `sound` (an event's sound), `clock`, `calc`, `calendar`,
-`cardfile`.
+`cardfile`, `charmap`, `pictures` (pictures or a folder after it), `pdf`
+(a PDF after it), `media` (songs or videos after it), `recorder`, `camera`,
+`dialer`, `news`, `diskspace`, `share`.
 
 ## On a Linux computer
 
@@ -204,7 +235,7 @@ Xephyr :2 -screen 1280x800 & DISPLAY=:2 retro-desktop
 ## Building it
 
 You need [Nim](https://nim-lang.org) 2.2 or later and
-[Retro Nim UI](https://github.com/foxoman/retroui) 0.20.8 or later.
+[Retro Nim UI](https://github.com/foxoman/retroui) 0.21.0 or later.
 
 ```sh
 nimble install retroui
@@ -218,6 +249,13 @@ programs from Retro Nim UI's examples:
 sh tools/build-deb.sh
 ```
 
+It has Retro Nim UI's File Manager, Paintbrush, Board, Notepad, Mail and
+Communicator too (`RETRO_APPS` chooses). Mail signs in with the Microsoft
+and Google app registrations it is built with: `RETRO_MAIL_MICROSOFT_ID`,
+`RETRO_MAIL_GOOGLE_ID` and `RETRO_MAIL_GOOGLE_SECRET` in the environment
+while it builds (the repository's secrets on GitHub). They are never in
+the code; without them Mail asks for your own.
+
 In Termux it builds on the phone (`pkg install nim clang git`); on Linux
 it cross-builds for 64-bit ARM with the Android NDK (`ANDROID_NDK_HOME`) or
 clang with lld and an Android sysroot (`tools/termux-cc.sh`). It uses the
@@ -226,7 +264,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.6 && git push origin v0.1.6`).
+tag is pushed (`git tag v0.1.7 && git push origin v0.1.7`).
 
 ## How it works
 

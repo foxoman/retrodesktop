@@ -11,11 +11,19 @@
 #   bin/retro-files       File Manager (Retro Files)        \
 #   bin/retro-board       Board (Retro Board)                | from Retro Nim
 #   bin/retro-photo       Paintbrush (Retro Photo)           | UI's examples
-#   bin/retro-notepad     Notepad                           /
+#   bin/retro-notepad     Notepad                            |
+#   bin/retro-mail        Mail (Retro Mail)                  |
+#   bin/retro-communicator Communicator (XMPP)              /
 #
 # RETROUI_SRC: a Retro Nim UI checkout (default ../retro, else it is cloned
 # into build/retroui). RETRO_APPS: which of the programs from the examples
-# (default "files board photo notepad"; "" for none).
+# (default "files board photo notepad mail communicator"; "" for none).
+#
+# Retro Mail signs in with Microsoft and Google through the app IDs it is
+# built with: RETRO_MAIL_MICROSOFT_ID, RETRO_MAIL_GOOGLE_ID and
+# RETRO_MAIL_GOOGLE_SECRET in the environment while it builds (CI: from its
+# secrets). Without them it asks each user for their own registration. They
+# are never written in this repository.
 #
 # Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
@@ -25,7 +33,7 @@ TOP=$PWD
 VERSION=$(sed -n 's/^ *DesktopVersion\* = "\(.*\)".*/\1/p' src/retrodesktop/common.nim)
 ARCH=aarch64
 TERMUX=/data/data/com.termux/files/usr
-APPS=${RETRO_APPS-"files board photo notepad"}
+APPS=${RETRO_APPS-"files board photo notepad mail communicator"}
 
 KIT=${RETROUI_SRC:-}
 if [ -z "$KIT" ]; then
@@ -61,6 +69,10 @@ for app in $APPS; do
     board)   src=retroboard.nim;  exe=retro-board;   icon=board-icon.png ;;
     photo)   src=photo.nim;       exe=retro-photo;   icon=photo-icon.png ;;
     notepad) src=notepad.nim;     exe=retro-notepad; icon="" ;;
+    mail)    src=mail.nim;        exe=retro-mail;    icon=mail-icon.png
+             [ -n "$RETRO_MAIL_GOOGLE_ID$RETRO_MAIL_MICROSOFT_ID" ] ||
+               echo "   (no RETRO_MAIL_* app IDs in the environment: Mail will ask for the user's own)" ;;
+    communicator) src=communicator.nim; exe=retro-communicator; icon="" ;;
     gallery) src=gallery.nim;     exe=retro-gallery; icon=gallery-icon.png ;;
     *) echo "unknown program: $app"; exit 1 ;;
   esac
@@ -80,16 +92,20 @@ Version: $VERSION
 Architecture: $ARCH
 Maintainer: Sultan Al Isaiee <sultan@foxoman.net>
 Installed-Size: $SIZE
-Depends: libx11, libxss, termux-x11-nightly
+Depends: libx11, libxss, termux-x11-nightly, libcurl, openssl
 Homepage: https://github.com/foxoman/retrodesktop
 Description: A Windows 3.1 style desktop for Termux:X11
  Retro Desktop is a desktop and window manager in the style of Windows 3.1
  for Termux on Android (Termux:X11): every X11 program in a 3.1 frame,
- Program Manager with the programs you install, Setup to install more
- (pkg underneath), Terminal, Write, Clock, Calculator, Calendar, Cardfile,
+ Program Manager with the programs you install, a panel with the Programs
+ menu and the windows, icons on the desktop, Setup to install more (pkg
+ underneath), Terminal, Write, Character Map, Picture Viewer, PDF Reader,
+ Media Player, Sound Recorder, Camera, Phone Dialer, News Reader, Disk
+ Space, Share Desktop (VNC), Clock, Calculator, Calendar, Cardfile,
  Clipboard Viewer, Minesweeper, Solitaire, Reversi, a DOS group for
- DOSBox-X, Help on F1, sounds and wallpapers of its own, Control Panel,
- Task List, File Manager, Paintbrush, Board and Notepad. Start it with:
+ DOSBox-X, the Android apps, Help on F1, sounds, wallpapers and night
+ colors, English or Arabic, Control Panel, Task List, File Manager,
+ Paintbrush, Board, Notepad, Mail and Communicator. Start it with:
  retro-desktop
 CTL
 mkdir -p build

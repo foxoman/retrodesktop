@@ -36,7 +36,7 @@ type
     transient*: Window
     canDelete, takeFocus, noInput, fixed: bool
     posGiven: bool             ## the program said where its window goes
-    dialog: bool               ## a dialog (centered when it belongs to no window)
+    dialog*: bool              ## a dialog (centered when it belongs to no window)
     minW, minH: int
     icon*: Bitmap              ## its icon (_NET_WM_ICON), nil when it has none
     iconRead: bool
@@ -66,6 +66,7 @@ var
     ## 4 the settings changed, 5 exit)
   sound*: proc (event: string) {.nimcall.}
     ## a window opened, closed, was minimized, maximized, restored: its sound
+  refresh*: proc () {.nimcall.}  ## the windows, their order or titles changed (the panel)
   bigFrames*: bool               ## title bars and borders for fingers
   maximizeNew*: bool             ## new windows open maximized (a phone)
   drag: tuple[kind: DragKind; c: Client; part: Part; rx, ry: int; x, y, w, h: int]
@@ -79,6 +80,8 @@ var
               fromX, fromY: int; armed: bool]
   switchWin: Window              # Alt+Tab's box (None: not shown)
   backKey = 0                    # Android's Back (XF86Back), 0 when the keyboard has none
+  backCloses = false             # ... closes the window in front (Control Panel > Windows)
+  backGrabbed = false
   switchTo: Client
   pending*: seq[tuple[class, title: string; x, y, w, h: int; maximized, iconic: bool; until: float]]
     ## where the programs the desktop opened again had their windows (by
@@ -90,6 +93,7 @@ var
 
 proc changedNow() =
   if changed != nil: changed()
+  if refresh != nil: refresh()
   ui.redraw = true
   x11Wake()
 
@@ -100,7 +104,7 @@ proc snapshot(): seq[Client] =
   ## (raising one reorders it).
   for x in clients: result.add x
 
-proc dpx(v: int): int =
+proc dpx*(v: int): int =
   ## `v` design pixels in the screen's own pixels: X windows are in them.
   if v <= 1 and v >= -1: v else: devPx(float(v))
 
@@ -113,10 +117,21 @@ proc topOf(): int = bw() + tbh() + 1
 proc frameW(c: Client): int = c.w + 2 * bw()
 proc frameH(c: Client): int = c.h + bw() + topOf()
 
-proc xcolor(c: Color): culong = (culong(c.r) shl 16) or (culong(c.g) shl 8) or culong(c.b)
+proc xcolor*(c: Color): culong = (culong(c.r) shl 16) or (culong(c.g) shl 8) or culong(c.b)
 
 proc screenSize*(): tuple[w, h: int] =
   (int(XDisplayWidth(dpy, scr)), int(XDisplayHeight(dpy, scr)))
+
+var
+  workBottom*: int               ## pixels at the bottom kept for the panel
+  onTop*: seq[Window]            ## windows kept over the programs' (the panel)
+  otherEvents*: proc (p: pointer): bool {.nimcall.}
+    ## the events of windows of the desktop's own besides these (the panel's)
+
+proc workArea*(): tuple[w, h: int] =
+  ## The screen less the panel: where windows go, maximized windows too.
+  let (sw, sh) = screenSize()
+  (sw, max(1, sh - workBottom))
 
 proc titleColors(c: Client): tuple[bg, fg: Color] =
   let t = ui.theme
@@ -133,7 +148,7 @@ proc fillX(w: Window; x, y, ww, hh: int; c: Color) =
   discard XSetForeground(dpy, gc, xcolor(c))
   discard XFillRectangle(dpy, w, gc, cint(x), cint(y), cuint(ww), cuint(hh))
 
-proc putBitmap(w: Window; b: Bitmap; x, y: int) =
+proc putBitmap*(w: Window; b: Bitmap; x, y: int) =
   ## A picture from the kit's canvas put on a window (24-bit screens).
   if b == nil or b.w <= 0 or b.h <= 0 or XDefaultDepth(dpy, scr) < 24: return
   let img = XCreateImage(dpy, XDefaultVisual(dpy, scr), 24, ZPixmap, 0, addr b.px[0],
@@ -251,7 +266,7 @@ proc drawFrame*(c: Client) =
     cv.fillStyle = fg
     cv.textBaseline = "middle"
     cv.textAlign = "center"
-    var title = c.title
+    var title = tr(c.title)
     let room = float(right - th - 8)
     if room > 8:
       if cv.measureText(title).width > room:
@@ -348,6 +363,7 @@ proc updateClientList() =
   for c in clients: l.add clong(c.win)
   setLongs(dpy, root, aNetClientList, XA_WINDOW, l)
   setLongs(dpy, root, atom(dpy, "_NET_CLIENT_LIST_STACKING"), XA_WINDOW, l)
+  if refresh != nil: refresh()
 
 proc sendConfigure(c: Client) =
   ## Tells the program where its window is on the screen (it was moved
@@ -393,7 +409,7 @@ proc applyGeometry(c: Client) =
   sendConfigure(c)
 
 proc maximizeGeometry(c: Client) =
-  let (sw, sh) = screenSize()
+  let (sw, sh) = workArea()
   c.x = -bw()
   c.y = -bw()
   c.w = sw
@@ -401,7 +417,7 @@ proc maximizeGeometry(c: Client) =
 
 proc fitOnScreen(c: Client) =
   ## Keeps the frame on the screen: no larger than it, its title bar in it.
-  let (sw, sh) = screenSize()
+  let (sw, sh) = workArea()
   c.w = clamp(c.w, 1, max(1, sw - 2 * bw()))
   c.h = clamp(c.h, 1, max(1, sh - bw() - topOf()))
   c.x = clamp(c.x, -(c.frameW - dpx(60)), sw - dpx(60))
@@ -410,7 +426,7 @@ proc fitOnScreen(c: Client) =
 proc place(c: Client; x, y: int; given: bool) =
   ## Where a new window goes: where it asks, over the window it belongs to
   ## (a dialog), else the next step of a cascade from the top left.
-  let (sw, sh) = screenSize()
+  let (sw, sh) = workArea()
   let parent = findClient(c.transient)
   if parent != nil:
     c.x = parent.x + (parent.frameW - c.frameW) div 2
@@ -452,6 +468,9 @@ proc raiseClient(c: Client) =
   for d in clients:
     if d.transient == c.win and not d.iconic:
       discard XRaiseWindow(dpy, d.frame)
+  # (the panel over every window, but a full-screen one)
+  if not c.fullscreen:
+    for w in onTop: discard XRaiseWindow(dpy, w)
 
 proc focus*(c: Client) =
   ## `c` in front and taking the keyboard (nil: the desktop).
@@ -622,7 +641,7 @@ proc iconicClients*(): seq[Client] =
 proc cascade*() =
   ## The windows one over another, from the top left.
   cascadeAt = 0
-  let (sw, sh) = screenSize()
+  let (sw, sh) = workArea()
   for c in snapshot():
     if c.iconic or c.fullscreen or c.transient != None: continue
     if c.maximized:
@@ -645,7 +664,7 @@ proc tile*() =
   for c in snapshot():
     if not c.iconic and not c.fullscreen and c.transient == None and not c.fixed: l.add c
   if l.len == 0: return
-  let (sw, sh) = screenSize()
+  let (sw, sh) = workArea()
   let cols = int(ceil(sqrt(float(l.len))))
   let rows = (l.len + cols - 1) div cols
   let reserve = if iconicClients().len > 0: dpx(76) else: 0
@@ -743,7 +762,7 @@ proc drawSwitch() =
   cv.fillStyle = t.text
   cv.textBaseline = "middle"
   cv.textAlign = "left"
-  var title = switchTo.title
+  var title = tr(switchTo.title)
   let room = float(w - isz - 3 * pad)
   while title.len > 3 and cv.measureText(title).width > room:
     title = title[0 ..< title.len - 4] & "..."
@@ -805,7 +824,7 @@ proc snapped(c: Client; x, y: int): (int, int) =
   ## A frame moved near an edge of the screen or of another window: against
   ## it (side by side, or lined up), as a finger cannot place it to the pixel.
   let near = dpx(if bigFrames: 16 else: 10)
-  let (sw, sh) = screenSize()
+  let (sw, sh) = workArea()
   let fw = c.frameW
   let fh = c.frameH
   var bx = x
@@ -875,12 +894,21 @@ proc drawMenu() =
       cv.fillRect(2, float(y), float(menu.w - 4), float(menu.itemH))
     let ink = if not it.enabled: t.gray elif hot: t.selectText else: t.text
     cv.fillStyle = ink
+    let ty = float(y + menu.itemH div 2)
+    if ui.rtl:
+      # (right to left, as the interface: the label at the right, the keys at the left)
+      cv.textAlign = "right"
+      cv.fillText(it.label.replace("&", ""), float(menu.w - dpx(14)), ty)
+      if it.keys.len > 0:
+        cv.textAlign = "left"
+        cv.fillText(it.keys, float(dpx(10)), ty)
+      y += menu.itemH
+      continue
     cv.textAlign = "left"
     # (the letter after "&" underlined, as 3.1's menus have it)
     let amp = it.label.find('&')
     let shown = it.label.replace("&", "")
     let tx = float(dpx(14))
-    let ty = float(y + menu.itemH div 2)
     cv.fillText(shown, tx, ty)
     if amp >= 0 and amp < shown.len:
       let x0 = tx + cv.measureText(shown[0 ..< amp]).width
@@ -888,7 +916,7 @@ proc drawMenu() =
       cv.fillRect(x0, ty + float(px) * 0.45, w, max(1.0, float(px) / 12))
     if it.keys.len > 0:
       cv.textAlign = "right"
-      cv.fillText(it.keys, float(menu.w - dpx(10)), float(y + menu.itemH div 2))
+      cv.fillText(it.keys, float(menu.w - dpx(10)), ty)
     y += menu.itemH
   putBitmap(menuWin, cv.toBitmap, 0, 0)
 
@@ -916,13 +944,19 @@ proc showMenu*(items: seq[MenuItem]; x, y: int; above = false) =
   closeMenu()
   if items.len == 0: return
   menu.items = items
+  # (in the interface's language: a label translated loses its "&")
+  for it in menu.items.mitems:
+    if it.label.len > 0:
+      let bare = it.label.replace("&&", "\1").replace("&", "").replace("\1", "&")
+      let t = tr(bare)
+      if t != bare: it.label = t
   menu.itemH = max(16, dpx(if bigFrames: 32 else: 22))
   # (as wide as its widest label and keys)
   let probe = newCanvas2D(4, 4)
   let px = max(9, int(round(float(menu.itemH) * 0.5)))
   probe.font = $px & "px sans-serif"
   var lw, kw = 0.0
-  for it in items:
+  for it in menu.items:
     lw = max(lw, probe.measureText(it.label.replace("&", "")).width)
     kw = max(kw, probe.measureText(it.keys).width)
   menu.w = max(dpx(140), int(lw + kw) + dpx(14 + 24 + 10))
@@ -1013,7 +1047,7 @@ proc openMenu*(c: Client; x, y: int) =
 # ---- managing a window ------------------------------------------------------------------------------
 
 proc manage(w: Window; adopt: bool) =
-  if w == desk or w == checkWin or w == menuWin or findClient(w) != nil: return
+  if w == desk or w == checkWin or w == menuWin or w in onTop or findClient(w) != nil: return
   var a: XWindowAttributes
   if XGetWindowAttributes(dpy, w, addr a) == 0: return
   if a.overrideRedirect != 0: return
@@ -1280,7 +1314,7 @@ proc onKey(e: XKeyEvent) =
     if taskList != nil: taskList()
   elif e.keycode == esc and mods == Mod1Mask:
     if active != nil: minimize(active)
-  elif backKey != 0 and e.keycode == cuint(backKey):
+  elif backKey != 0 and backCloses and e.keycode == cuint(backKey):
     # (Android's Back, when Termux:X11 gives it as XF86Back: the window in front closes)
     if menuWin != None: closeMenu()
     elif switchWin != None: closeSwitch()
@@ -1359,6 +1393,7 @@ proc handle(p: pointer): bool {.nimcall.} =
   ## The hook: the events of the windows the manager owns; the desktop's own
   ## window's are left to the kit.
   if not running: return false
+  if otherEvents != nil and otherEvents(p): return true
   let e = cast[ptr XEvent](p)
   let kind = e.theType
   case kind
@@ -1405,6 +1440,7 @@ proc handle(p: pointer): bool {.nimcall.} =
     if a == aNetWmName or a == XA_WM_NAME:
       readTitle(c)
       drawFrame(c)
+      if refresh != nil: refresh()
       if c.iconic: changedNow()
     elif a == aWmProtocols or a == aWmHints:
       readProtocols(c)
@@ -1539,6 +1575,20 @@ proc onXError(d: Display; e: ptr XErrorEvent): cint {.cdecl.} =
   if e.errorCode == 10 and e.requestCode == 2: otherWm = true     # BadAccess on ChangeWindowAttributes
   0
 
+proc setBackCloses*(on: bool) =
+  ## Android's Back key (XF86Back, when Termux:X11 gives it to X) closes the
+  ## window in front (`on`), or goes to the program in front as any key
+  ## (off, the default: Termux:X11's own use of Back -- its keyboard -- and
+  ## a browser's Back are left alone).
+  backCloses = on
+  if dpy == nil: return
+  if backKey == 0: backKey = int(XKeysymToKeycode(dpy, 0x1008FF26.culong))
+  if backKey == 0 or on == backGrabbed: return
+  for extra in [0.cuint, LockMask, Mod2Mask, LockMask or Mod2Mask]:
+    if on: discard XGrabKey(dpy, cint(backKey), extra, root, 1, GrabModeAsync, GrabModeAsync)
+    else: discard XUngrabKey(dpy, cint(backKey), extra, root)
+  backGrabbed = on
+
 proc grabKeys() =
   for (sym, mods) in [(XK_Tab, Mod1Mask), (XK_Tab, Mod1Mask or ShiftMask), (XK_F4, Mod1Mask),
                       (XK_Escape, ControlMask), (XK_Escape, Mod1Mask)]:
@@ -1546,11 +1596,8 @@ proc grabKeys() =
     if code == 0: continue
     for extra in [0.cuint, LockMask, Mod2Mask, LockMask or Mod2Mask]:
       discard XGrabKey(dpy, code, mods or extra, root, 1, GrabModeAsync, GrabModeAsync)
-  # (Android's Back key: XF86Back)
-  backKey = int(XKeysymToKeycode(dpy, 0x1008FF26.culong))
-  if backKey != 0:
-    for extra in [0.cuint, LockMask, Mod2Mask, LockMask or Mod2Mask]:
-      discard XGrabKey(dpy, cint(backKey), extra, root, 1, GrabModeAsync, GrabModeAsync)
+  backGrabbed = false
+  setBackCloses(backCloses)
 
 proc start*(): bool =
   ## Becomes the screen's window manager, on the connection of the desktop's

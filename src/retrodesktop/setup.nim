@@ -102,6 +102,7 @@ let Offers = @[
   offer("System", "Fastfetch", "fastfetch", "", "Your system at a glance, in the Terminal", cli = "fastfetch; read -n 1 -p 'Press a key'"),
   offer("System", "Termux:API tools", "termux-api", "", "The phone's clipboard and notifications (needs the Termux:API app)"),
   offer("System", "QEMU", "qemu-system-x86-64", "x11", "A whole PC in a window, for other systems", big = true),
+  offer("System", "Share Desktop", "x11vnc", "x11", "Use this desktop from a computer (VNC): Main > Share Desktop"),
   offer("System", "3D graphics", "virglrenderer-android mesa", "",
         "OpenGL programs and games drawn by Android's GPU (VirGL)"),
   offer("Fonts", "DejaVu", "ttf-dejavu", "", "Fonts with more letters and symbols"),
