@@ -35,7 +35,6 @@ type
     posGiven: bool             ## the program said where its window goes
     dialog: bool               ## a dialog (centered when it belongs to no window)
     minW, minH: int
-    ignoreUnmap: int
     icon*: Bitmap              ## its icon (_NET_WM_ICON), nil when it has none
     iconRead: bool
     pressed: Part
@@ -55,7 +54,7 @@ var
   otherWm: bool
   changed*: proc () {.nimcall.}  ## the desktop should draw again (icons)
   taskList*: proc () {.nimcall.} ## Ctrl+Esc
-  command*: proc (n: int) {.nimcall.}
+  command*: proc (n, arg: int) {.nimcall.}
     ## a _RETRO_DESKTOP message the desktop answers (3 arrange icons,
     ## 4 the settings changed, 5 exit)
   bigFrames*: bool               ## title bars and borders for fingers
@@ -703,7 +702,6 @@ proc manage(w: Window; adopt: bool) =
   discard XSelectInput(dpy, w, PropertyChangeMask or StructureNotifyMask)
   discard XAddToSaveSet(dpy, w)
   discard XSetWindowBorderWidth(dpy, w, 0)
-  if adopt: inc c.ignoreUnmap           # (reparenting a shown window unmaps it once)
   discard XReparentWindow(dpy, w, c.frame, cint(bw()), cint(topOf()))
   discard XResizeWindow(dpy, w, cuint(c.w), cuint(c.h))
   discard XGrabButton(dpy, AnyButton, AnyModifier, w, 0, cuint(ButtonPressMask),
@@ -954,7 +952,7 @@ proc onClientMessage(e: XClientMessageEvent) =
     of 1: cascade()
     of 2: tile()
     else:
-      if command != nil: command(int(e.data[0]))
+      if command != nil: command(int(e.data[0]), int(e.data[1]))
 
 proc onConfigureRequest(e: XConfigureRequestEvent) =
   let c = findClient(e.window)
@@ -1016,8 +1014,12 @@ proc handle(p: pointer): bool {.nimcall.} =
     if w == desk or e.xany.window == desk: return false
     let c = findClient(w)
     if c != nil and c.win == w:
-      if c.ignoreUnmap > 0: dec c.ignoreUnmap
-      elif not c.iconic: unmanage(c, false)
+      # (only the program's own unmapping counts -- in its frame, or ICCCM's
+      # synthetic one to the root; not the copies X sends the window itself,
+      # nor the root's when the window was put into its frame: counting those
+      # let go of windows the desktop took from a desktop before it)
+      if e.xunmap.event == c.frame or (e.xunmap.sendEvent != 0 and e.xunmap.event == root):
+        unmanage(c, false)
     return true
   of DestroyNotify:
     let w = e.xdestroywindow.window
@@ -1182,6 +1184,11 @@ proc start*(): bool =
   setLongs(dpy, root, check, XA_WINDOW, [clong(checkWin)])
   setLongs(dpy, checkWin, check, XA_WINDOW, [clong(checkWin)])
   setText(dpy, checkWin, aNetWmName, aUtf8, "Retro Desktop")
+  # (whose it is: a desktop started again finds the one that runs, and ends
+  # it when it no longer answers)
+  block:
+    proc c_getpid(): cint {.importc: "getpid", header: "<unistd.h>".}
+    setLongs(dpy, checkWin, atom(dpy, "_NET_WM_PID"), XA_CARDINAL, [clong(c_getpid())])
   var supported: seq[clong]
   for a in [aNetActive, aNetClose, aNetState, aNetFullscreen, aNetMaxH, aNetMaxV, aNetHidden,
             aNetClientList, aNetType, aTypeDesktop, aTypeDock, aTypeDialog, aNetWmName,

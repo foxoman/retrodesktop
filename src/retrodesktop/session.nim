@@ -6,7 +6,7 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils, tables, math]
+import std/[os, strutils, tables, math, times, posix]
 import retroui
 import retroui/uirelays/drivers/x11_driver
 import xlib, common, theming, wm, link, art
@@ -77,9 +77,14 @@ proc wakeLock(on: bool) =
 # ---- starting and ending -----------------------------------------------------------------------------
 
 proc startPrograms() =
-  if conf.setting("startProgman", "on") != "off": launch(selfCommand("progman"))
-  for it in progItems():
-    if it.group == "StartUp": launch(it.command)
+  ## Program Manager (when it is not open already) and StartUp -- not when
+  ## this desktop took the windows of one before it: they are running.
+  let tookOver = managing and wm.clients.len > 0
+  if conf.setting("startProgman", "on") != "off" and findWindow("Program Manager") == 0:
+    launch(selfCommand("progman"))
+  if not tookOver:
+    for it in progItems():
+      if it.group == "StartUp": launch(it.command)
 
 proc beginExit*() =
   ## Ends the session: every program asked to close its windows, the
@@ -94,8 +99,15 @@ proc finishExit() =
   wakeLock(false)
   quitApp()
 
-proc onCommand(n: int) {.nimcall.} =
+proc onCommand(n, arg: int) {.nimcall.} =
   case n
+  of RetroPing:
+    let d = Display(x11Display())
+    if d != nil:
+      let r = XRootWindow(d, XDefaultScreen(d))
+      setLongs(d, r, atom(d, "_RETRO_DESKTOP_PONG"), XA_CARDINAL, [clong(arg)])
+      discard XFlush(d)
+    return
   of RetroArrange:
     iconSel = -1
     ui.redraw = true
@@ -334,11 +346,47 @@ proc watchMemory() =
 
 # ---- the session --------------------------------------------------------------------------------------
 
+proc oldSessions(): seq[int] =
+  ## Other desktops of this user running (`retro-desktop` with no argument),
+  ## from /proc.
+  let me = getCurrentProcessId()
+  for kind, path in walkDir("/proc"):
+    let pid = try: parseInt(path.extractFilename) except ValueError: -1
+    if pid <= 0 or pid == me: continue
+    try:
+      let args = readFile(path / "cmdline").split('\0')
+      var n = 0
+      for a in args:
+        if a.len > 0: inc n
+      if n == 1 and args[0].extractFilename == "retro-desktop": result.add pid
+    except CatchableError: discard
+
+proc answers(d: Display; r: Window): bool =
+  ## The desktop on the screen answers a ping (within two seconds).
+  let token = clong(getCurrentProcessId() * 1000 + (epochTime().int mod 1000))
+  let pong = atom(d, "_RETRO_DESKTOP_PONG")
+  var e: XEvent
+  e.xclient.theType = ClientMessage
+  e.xclient.window = r
+  e.xclient.messageType = atom(d, "_RETRO_DESKTOP")
+  e.xclient.format = 32
+  e.xclient.data[0] = clong(RetroPing)
+  e.xclient.data[1] = token
+  discard XSendEvent(d, r, 0, SubstructureRedirectMask or SubstructureNotifyMask, addr e)
+  for _ in 0 ..< 20:
+    discard XSync(d, 0)
+    let v = propLongs(d, r, pong, XA_CARDINAL)
+    if v.len > 0 and v[0] == token: return true
+    sleep(100)
+  false
+
 proc desktopShown(): bool =
-  ## Retro Desktop runs on this screen already (another session). When it
-  ## does not, the X resources a desktop before left on the server go: the
-  ## kit would take their dpi for the screen's (and this desktop puts its
-  ## own back once it knows the screen).
+  ## Retro Desktop runs on this screen already (another session, which
+  ## answers). A desktop that stopped answering -- hung after a crash -- is
+  ## ended, and its programs' windows come to this one. When no desktop
+  ## runs, the X resources a desktop before left on the server go: the kit
+  ## would take their dpi for the screen's (and this desktop puts its own
+  ## back once it knows the screen).
   var name = getEnv("DISPLAY")
   if name.len == 0 and inTermux(): name = ":0"
   if name.len == 0: return false
@@ -349,16 +397,52 @@ proc desktopShown(): bool =
   if c.len > 0:
     # (the check window of a desktop that ended is gone: an error, no desktop)
     var name = ""
+    var pids: seq[clong]
     trapErrors(d):
       name = propText(d, Window(c[0]), atom(d, "_NET_WM_NAME"))
+      pids = propLongs(d, Window(c[0]), atom(d, "_NET_WM_PID"), XA_CARDINAL)
     result = not xTrapped and name == DesktopName
+    if result and not answers(d, r):
+      # (it hangs: ended, and its windows' frames go with it -- the X server
+      # gives the programs' windows back to the screen, for this desktop)
+      var victims: seq[int]
+      if pids.len > 0: victims.add int(pids[0])
+      else: victims = oldSessions()
+      for pid in victims: discard posix.kill(Pid(pid), SIGKILL)
+      for _ in 0 ..< 30:
+        var gone = false
+        trapErrors(d):
+          discard propText(d, Window(c[0]), atom(d, "_NET_WM_NAME"))
+        gone = xTrapped
+        if gone: break
+        sleep(100)
+      result = false
   if not result and ownResources(d):
     discard XDeleteProperty(d, r, atom(d, "RESOURCE_MANAGER"))
     discard XSync(d, 0)
   discard XCloseDisplay(d)
 
+proc c_exit(code: cint) {.importc: "_exit", header: "<unistd.h>", noreturn.}
+
+proc onFatal(sig: cint) {.noconv.} =
+  ## A crash ends the desktop at once -- no stack trace, which could hang on a
+  ## broken heap: the X server gives the programs' windows back to the
+  ## screen, and `retro-desktop` starts a new desktop that takes them.
+  const msg = "Retro Desktop stopped: a fatal error (the windows went back to the screen)\n"
+  discard posix.write(2, msg.cstring, msg.len)
+  c_exit(70)
+
 proc runSession*() =
   ## The desktop, until Exit.
+  # (what goes wrong is kept: ~/.local/share/retrodesktop/desktop.log)
+  try:
+    let log = dataDir(SettingsName) / "desktop.log"
+    createDir(log.parentDir)
+    discard reopen(stderr, log, fmWrite)
+    stderr.writeLine(DesktopName & " " & DesktopVersion & ", started " & $now())
+    stderr.flushFile()
+  except CatchableError: discard
+  for s in [SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGFPE]: discard posix.signal(s, onFatal)
   if desktopShown():
     # (a second start: Program Manager on the desktop that runs)
     if getEnv("DISPLAY").len == 0: putEnv("DISPLAY", ":0")

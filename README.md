@@ -64,7 +64,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.1_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.2_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -93,6 +93,13 @@ Android stops programs it thinks you do not use. For a desktop that stays:
   (a pointer you move).
 - *Show additional keyboard:* Esc, Ctrl, Alt, Tab -- for Alt+Tab and the rest.
 - *Fullscreen on device display* and *Hide display cutout*, for all of the screen.
+
+### When something goes wrong
+
+Start `retro-desktop` again: a desktop that stopped answering is ended and
+the new one takes its windows. What went wrong is in
+`~/.local/share/retrodesktop/desktop.log` -- send me that file with the
+issue. `pkill retro-desktop` ends the desktop and all its programs.
 
 ## Using it
 
@@ -150,7 +157,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.1 && git push origin v0.1.1`).
+tag is pushed (`git tag v0.1.2 && git push origin v0.1.2`).
 
 ## How it works
 

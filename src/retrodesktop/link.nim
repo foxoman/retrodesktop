@@ -17,6 +17,9 @@ const
   RetroLookChanged* = 4
   RetroExit* = 5
   RetroAskExit* = 6
+  RetroPing* = 7
+    ## (a desktop started again asks the one that runs whether it answers:
+    ## it puts the number it was sent in the root's _RETRO_DESKTOP_PONG)
 
   LookAtom* = "_RETRO_DESKTOP_LOOK"
     ## a number on the root window the desktop counts up when the look

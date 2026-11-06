@@ -19,13 +19,17 @@ with an argument one of its programs: `progman` (Program Manager),
   canvas.
 - Other programs get the look through XSETTINGS, X resources, fontconfig and
   a generated "Retro31" GTK 3 theme.
+- The desktop's log: `~/.local/share/retrodesktop/desktop.log`; a crash
+  ends it at once (`_exit`), and a new start ends a desktop that does not
+  answer the ping and takes its windows.
 - Settings: retroui's `loadSettings("retrodesktop")` (scheme, desktopColor,
   pattern, wallpaper, wallpaperMode, font, textScale, size, touch,
   maximizeNew, linuxLook, wakeLock, startProgman); Program Manager's
   items and windows in "retrodesktop-progman".
 - Programs talk to the desktop with ClientMessages on the root window:
   `_RETRO_DESKTOP` (1 cascade, 2 tile, 3 arrange icons, 4 the look changed,
-  5 exit, 6 ask to exit) and EWMH's `_NET_ACTIVE_WINDOW`,
+  5 exit, 6 ask to exit, 7 ping: the answer goes in the root's
+  `_RETRO_DESKTOP_PONG`) and EWMH's `_NET_ACTIVE_WINDOW`,
   `_NET_CLOSE_WINDOW`; they follow the look through the root's
   `_RETRO_DESKTOP_LOOK` property. `retro-desktop --retro-command n` sends
   `_RETRO_DESKTOP` n from a script.

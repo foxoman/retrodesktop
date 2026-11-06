@@ -9,7 +9,7 @@ import retroui
 import retroui/[svgimport, imaging]
 
 const
-  DesktopVersion* = "0.1.1"
+  DesktopVersion* = "0.1.2"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.2
+
+- **A desktop that hangs is replaced.** `retro-desktop` asks the desktop
+  that runs whether it answers (`_RETRO_DESKTOP` 7, a ping); when it does
+  not within two seconds -- hung after a crash -- it is ended and the new
+  desktop takes its programs' windows, framed again, with no second
+  Program Manager and StartUp not run again.
+- **A crash ends the desktop at once** (no stack trace that could hang on a
+  broken heap, as 0.1.0's Cascade crash hung on Android): the X server gives
+  the windows back to the screen, and the next start takes them.
+- **Fixed: windows a desktop takes over were let go at once.** X tells of
+  the unmapping when a shown window is put into its frame twice (to the
+  window, and to the root); only a program's own unmapping counts now.
+- What goes wrong is kept in `~/.local/share/retrodesktop/desktop.log`.
+
 ## 0.1.1
 
 - **Terminal**, the desktop's own: a shell in a window in a PC's 16 text

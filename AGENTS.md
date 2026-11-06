@@ -54,7 +54,9 @@ alike.
    (`devPx`, `devScale`: the kit's scale times its pixel zoom `pxScale`);
    the kit's drawing is in logical pixels (`dp`). Never walk `clients` while
    something can reorder it (`snapshot()`), and read the properties of
-   windows that may be gone inside `trapErrors`.
+   windows that may be gone inside `trapErrors`. Only a program's own
+   unmapping (in its frame, or ICCCM's synthetic one to the root) lets
+   go of its window.
 7. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
    that keeps the CPU awake when nothing changes (`wakeIn` only as needed),
    memory let go when the phone runs short (`onMemoryPressure`).
