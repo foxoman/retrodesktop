@@ -1,6 +1,6 @@
-## Terminal: a shell in a window, as the desktop's own MS-DOS Prompt -- gray
-## letters on black in the 16 colors of a PC's text screen (or black on
-## white), the line-drawing characters drawn whole, xterm's escape
+## Terminal: a shell in a window, as the desktop's own MS-DOS Prompt -- in
+## the 16 colors of a PC's text screen, black on white as Windows' windows
+## (or MS-DOS's gray on black), the line-drawing characters drawn whole, xterm's escape
 ## sequences (`vt.nim`) for full-screen programs (vim, nano, htop, mc, less),
 ## mouse reports for the ones that take the mouse, a scrollback to wheel
 ## through, selecting with the mouse, copy and paste.
@@ -183,7 +183,7 @@ const Cga = [
   (255, 255, 85), (85, 85, 255), (255, 85, 255), (85, 255, 255), (255, 255, 255)]
 
 var
-  whiteScheme = false
+  whiteScheme = true             ## black on white, as Windows' own windows (MS-DOS Colors: gray on black)
   boldLetters = true             ## every letter bold: chunky, as a PC's text screen had them
   fontK = 1.0
   scrollLines = 3000
@@ -579,7 +579,10 @@ proc mouseReport(button, col, row: int; release: bool) =
 var lastMouseCell = (-1, -1)
 
 proc mouse(r: Rect) =
-  let over = ui.mx >= r.x and ui.mx < r.x + r.w and ui.my >= r.y and ui.my < r.y + r.h
+  # (the screen's own only when nothing is over it: a menu, a dialog -- their
+  # clicks are theirs)
+  let hit = interact(idOf("terminal-screen"), r, focusable = false)
+  let over = hit.hover and ui.dialogTop == 0 and ui.popup == 0
   let col = clamp(int(float(ui.mx - area.x) / cw), 0, scr.cols - 1)
   let row = clamp((ui.my - area.y) div chH, 0, scr.rows - 1)
   let reports = scr.mouse != mmNone and ShiftPressed notin ui.mods and view == 0
@@ -635,7 +638,7 @@ proc mouse(r: Rect) =
       wakeIn(50)
   elif sel.active and ui.released:
     sel.active = false
-  if over and ui.rpressed:
+  if over and ui.rpressed and not ui.pressUsed:
     openPopupMenu("term", ui.mx, ui.my)
 
 # ---- the window -------------------------------------------------------------------------------
@@ -651,7 +654,7 @@ proc runTerminal*(args: seq[string]) =
   ## The terminal, until its shell ends (or its window is closed: the shell
   ## is told the terminal hung up).
   let s = loadSettings(TermSettings)
-  whiteScheme = s.getOrDefault("colors", "dos") == "white"
+  whiteScheme = s.getOrDefault("colors", "white") == "white"
   boldLetters = s.getOrDefault("bold", "1") == "1"
   try: fontK = clamp(parseFloat(s.getOrDefault("font", "1.0")), 0.6, 3.0) except ValueError: discard
   try: scrollLines = clamp(parseInt(s.getOrDefault("scrollback", "3000")), 100, 100_000) except ValueError: discard

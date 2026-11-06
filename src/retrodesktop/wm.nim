@@ -11,7 +11,7 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[math, tables, algorithm]
+import std/[math, tables, algorithm, strutils]
 import retroui
 import retroui/canvas2d
 import retroui/uirelays/drivers/x11_driver
@@ -42,7 +42,9 @@ type
 
   DragKind = enum dkNone, dkMove, dkResize, dkButton
 
-  MenuItem = tuple[label, keys: string; enabled: bool; action: proc ()]
+  MenuItem* = tuple[label, keys: string; enabled: bool; action: proc ()]
+    ## A menu's item: its label ("&" before the letter to underline; "" a
+    ## line between groups), its keys, whether it can be chosen, what it does.
 
 var
   dpy*: Display
@@ -67,7 +69,8 @@ var
   fleur: culong
   shownCursor: Table[Window, Part]
   cascadeAt = 0
-  menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int]
+  menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int;
+              fromX, fromY: int; armed: bool]
   aWmState, aWmProtocols, aWmDelete, aWmTakeFocus, aWmChangeState, aNetWmName, aUtf8,
     aNetActive, aNetClose, aNetState, aNetFullscreen, aNetMaxH, aNetMaxV, aNetHidden,
     aNetClientList, aNetType, aTypeDesktop, aTypeDock, aTypeDialog, aTypeSplash,
@@ -592,9 +595,11 @@ proc cycle*(back = false; time: Time = CurrentTime) =
 
 # ---- the control menu -------------------------------------------------------------------------------
 
-proc closeMenu() =
+proc closeMenu*() =
+  ## The menu that is open (the control menu, the desktop's) closed.
   if menuWin != None:
     discard XUngrabPointer(dpy, CurrentTime)
+    discard XUngrabKeyboard(dpy, CurrentTime)
     discard XDestroyWindow(dpy, menuWin)
     menuWin = None
     menu.items = @[]
@@ -621,9 +626,19 @@ proc drawMenu() =
     if hot:
       cv.fillStyle = t.select
       cv.fillRect(2, float(y), float(menu.w - 4), float(menu.itemH))
-    cv.fillStyle = (if not it.enabled: t.gray elif hot: t.selectText else: t.text)
+    let ink = if not it.enabled: t.gray elif hot: t.selectText else: t.text
+    cv.fillStyle = ink
     cv.textAlign = "left"
-    cv.fillText(it.label, float(dpx(14)), float(y + menu.itemH div 2))
+    # (the letter after "&" underlined, as 3.1's menus have it)
+    let amp = it.label.find('&')
+    let shown = it.label.replace("&", "")
+    let tx = float(dpx(14))
+    let ty = float(y + menu.itemH div 2)
+    cv.fillText(shown, tx, ty)
+    if amp >= 0 and amp < shown.len:
+      let x0 = tx + cv.measureText(shown[0 ..< amp]).width
+      let w = cv.measureText(shown[amp .. amp]).width
+      cv.fillRect(x0, ty + float(px) * 0.45, w, max(1.0, float(px) / 12))
     if it.keys.len > 0:
       cv.textAlign = "right"
       cv.fillText(it.keys, float(menu.w - dpx(10)), float(y + menu.itemH div 2))
@@ -638,29 +653,43 @@ proc menuItemAt(x, y: int): int =
     yy += h
   -1
 
-proc openMenu*(c: Client; x, y: int) =
-  ## The control menu of `c` (Restore, Move, Size, Minimize, Maximize, Close,
-  ## Switch To...) at `x`, `y` on the screen.
+proc menuItem*(label, keys: string; enabled: bool; action: proc ()): MenuItem =
+  ## An item for `showMenu`.
+  (label, keys, enabled, action)
+
+proc menuLine*(): MenuItem =
+  ## A line between groups of items.
+  ("", "", false, nil)
+
+proc showMenu*(items: seq[MenuItem]; x, y: int; above = false) =
+  ## A menu at `x`, `y` on the screen (the screen's pixels; `above`: its
+  ## bottom at `y`), over every window: the pointer and the keyboard its own
+  ## until an item is chosen (a click, a letter, Enter) or it is left (a
+  ## click outside, Esc).
   closeMenu()
-  if c == nil: return
-  let isDialog = c.transient != None or c.fixed
-  menu.c = c
-  menu.items = @[
-    ("Restore", "", c.maximized or c.iconic, proc () = restore(menu.c)),
-    ("Minimize", "", not isDialog and not c.iconic, proc () = minimize(menu.c)),
-    ("Maximize", "", not isDialog and not c.maximized, proc () = maximize(menu.c)),
-    ("", "", false, nil),
-    ("Close", "Alt+F4", true, proc () = close(menu.c)),
-    ("", "", false, nil),
-    ("Switch To...", "Ctrl+Esc", true, proc () = (if taskList != nil: taskList()))]
+  if items.len == 0: return
+  menu.items = items
   menu.itemH = max(16, dpx(if bigFrames: 32 else: 22))
-  menu.w = dpx(190)
+  # (as wide as its widest label and keys)
+  let probe = newCanvas2D(4, 4)
+  let px = max(9, int(round(float(menu.itemH) * 0.5)))
+  probe.font = $px & "px sans-serif"
+  var lw, kw = 0.0
+  for it in items:
+    lw = max(lw, probe.measureText(it.label.replace("&", "")).width)
+    kw = max(kw, probe.measureText(it.keys).width)
+  menu.w = max(dpx(140), int(lw + kw) + dpx(14 + 24 + 10))
   menu.h = 4
   for it in menu.items: menu.h += (if it.label.len == 0: menu.itemH div 2 else: menu.itemH)
   let (sw, sh) = screenSize()
   menu.x = clamp(x, 0, max(0, sw - menu.w))
-  menu.y = clamp(y, 0, max(0, sh - menu.h))
+  menu.y = clamp((if above: y - menu.h else: y), 0, max(0, sh - menu.h))
   menu.hot = -1
+  # (the button that opened it, let go where it was pressed, leaves it open;
+  # moved onto an item first, the item is chosen -- 3.1's press, drag, let go)
+  menu.fromX = x
+  menu.fromY = y
+  menu.armed = false
   menuWin = XCreateSimpleWindow(dpy, root, cint(menu.x), cint(menu.y), cuint(menu.w), cuint(menu.h),
                                 0, 0, xcolor(ui.theme.window))
   # (override-redirect: a menu is not a window to manage)
@@ -668,12 +697,71 @@ proc openMenu*(c: Client; x, y: int) =
   attrs.overrideRedirect = 1
   discard XChangeWindowAttributes(dpy, menuWin, CWOverrideRedirect, addr attrs)
   discard XSelectInput(dpy, menuWin, ExposureMask or ButtonPressMask or ButtonReleaseMask or
-                       PointerMotionMask)
+                       PointerMotionMask or KeyPressMask)
   discard XMapWindow(dpy, menuWin)
   discard XRaiseWindow(dpy, menuWin)
   discard XGrabPointer(dpy, menuWin, 1, cuint(ButtonPressMask or ButtonReleaseMask or PointerMotionMask),
                        GrabModeAsync, GrabModeAsync, None, 0, CurrentTime)
+  discard XGrabKeyboard(dpy, menuWin, 0, GrabModeAsync, GrabModeAsync, CurrentTime)
   drawMenu()
+
+proc menuKey(e: XKeyEvent) =
+  ## Up and Down through the items, Enter chooses, Esc closes.
+  let code = e.keycode
+  template isKey(sym: culong): bool = code == cuint(XKeysymToKeycode(dpy, sym))
+  var step = 0
+  if isKey(XK_Escape):
+    closeMenu()
+    return
+  elif isKey(XK_Down): step = 1
+  elif isKey(XK_Up): step = -1
+  elif isKey(XK_Return):
+    let i = menu.hot
+    if i >= 0 and i < menu.items.len and menu.items[i].enabled:
+      let act = menu.items[i].action
+      closeMenu()
+      if act != nil: act()
+    return
+  if step == 0:
+    # (the underlined letter of an item chooses it)
+    var ek = e
+    let sym = XLookupKeysym(addr ek, 0)
+    if sym >= culong('a') and sym <= culong('z'):
+      for i, it in menu.items:
+        let amp = it.label.find('&')
+        if it.enabled and amp >= 0 and amp + 1 < it.label.len and
+           it.label[amp + 1].toLowerAscii == char(sym):
+          let act = it.action
+          closeMenu()
+          if act != nil: act()
+          return
+    return
+  if step != 0 and menu.items.len > 0:
+    var i = menu.hot
+    for _ in 0 ..< menu.items.len:
+      i = (i + step + menu.items.len) mod menu.items.len
+      if menu.items[i].label.len > 0 and menu.items[i].enabled: break
+    menu.hot = i
+    drawMenu()
+
+proc openMenu*(c: Client; x, y: int) =
+  ## The control menu of `c` (Restore, Minimize, Maximize, Close, Switch
+  ## To...) at `x`, `y` on the screen.
+  if c == nil: return
+  let isDialog = c.transient != None or c.fixed
+  menu.c = c
+  # (the window may be gone by the time an item is chosen)
+  template its(body: untyped): proc () =
+    proc () =
+      if menu.c != nil and menu.c in clients: body
+  showMenu(@[
+    menuItem("&Restore", "", c.maximized or c.iconic, its(restore(menu.c))),
+    menuItem("Mi&nimize", "", not isDialog and not c.iconic, its(minimize(menu.c))),
+    menuItem("Ma&ximize", "", not isDialog and not c.maximized, its(maximize(menu.c))),
+    menuLine(),
+    menuItem("&Close", "Alt+F4", true, its(close(menu.c))),
+    menuLine(),
+    menuItem("S&witch To...", "Ctrl+Esc", true, proc () = (if taskList != nil: taskList()))], x, y)
 
 # ---- managing a window ------------------------------------------------------------------------------
 
@@ -1057,6 +1145,7 @@ proc handle(p: pointer): bool {.nimcall.} =
       if active != nil: focus(nil)
       return false
     if menuWin != None and w == menuWin:
+      menu.armed = true
       let i = menuItemAt(int(e.xbutton.x), int(e.xbutton.y))
       if i < 0 and (e.xbutton.x < 0 or e.xbutton.y < 0 or e.xbutton.x >= cint(menu.w) or
                     e.xbutton.y >= cint(menu.h)):
@@ -1077,6 +1166,9 @@ proc handle(p: pointer): bool {.nimcall.} =
     let w = e.xmotion.window
     if menuWin != None and w == menuWin:
       let i = menuItemAt(int(e.xmotion.x), int(e.xmotion.y))
+      if not menu.armed and (abs(int(e.xmotion.xRoot) - menu.fromX) > dpx(6) or
+                             abs(int(e.xmotion.yRoot) - menu.fromY) > dpx(6)):
+        menu.armed = true
       if i != menu.hot:
         menu.hot = i
         drawMenu()
@@ -1095,19 +1187,25 @@ proc handle(p: pointer): bool {.nimcall.} =
     let w = e.xbutton.window
     if menuWin != None and w == menuWin:
       let i = menuItemAt(int(e.xbutton.x), int(e.xbutton.y))
-      if i >= 0 and menu.items[i].enabled:
+      if menu.armed and i >= 0 and menu.items[i].enabled:
         let act = menu.items[i].action
         closeMenu()
         if act != nil: act()
-      elif e.xbutton.x < 0 or e.xbutton.y < 0 or e.xbutton.x >= cint(menu.w) or
-           e.xbutton.y >= cint(menu.h):
-        discard                           # (a click outside: the menu closes on the press)
-      return true
+      # (the release goes on to the desktop too, where it was let go: a menu
+      # opened by the desktop's press -- a right click, a finger held -- would
+      # leave the desktop thinking the button is still down)
+      e.xbutton.window = desk
+      e.xbutton.x = e.xbutton.xRoot
+      e.xbutton.y = e.xbutton.yRoot
+      return false
     if drag.kind != dkNone:
       endDrag(e.xbutton)
       return true
     return w != desk
   of KeyPress:
+    if menuWin != None and e.xkey.window == menuWin:
+      menuKey(e.xkey)
+      return true
     if e.xkey.window == root:
       onKey(e.xkey)
       return true

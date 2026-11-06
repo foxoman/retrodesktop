@@ -59,6 +59,12 @@ alike.
    windows that may be gone inside `trapErrors`. Only a program's own
    unmapping (in its frame, or ICCCM's synthetic one to the root) lets
    go of its window.
+   The desktop is under every window, so whatever has to show over them --
+   its menu, the icons' menu, the control menu -- is the manager's
+   `showMenu` (a window of its own, the pointer and the keyboard grabbed),
+   never the kit's `popupMenu`. A widget drawn over a program's own screen
+   (the Terminal's) takes the mouse only when no menu or dialog is open
+   (`ui.popup == 0 and ui.dialogTop == 0`).
 7. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
    that keeps the CPU awake when nothing changes (`wakeIn` only as needed),
    memory let go when the phone runs short (`onMemoryPressure`).

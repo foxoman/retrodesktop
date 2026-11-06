@@ -21,7 +21,7 @@ var
   wallFor: (int, int)            # ... made for this size
   touchMode: bool                # icons open with one tap
   iconSel = -1
-  iconMenuFor: Client
+  focusRun: bool                 # (Run... chosen from the menu: its field focused)
   showWelcome, showExit, showRun, showAbout, showNoWm: bool
   welcomeAwake = true
   runText = ""
@@ -182,6 +182,26 @@ proc iconOf(c: Client; size: int): Bitmap =
   let b = c.readIcon(px)
   if b != nil: b else: appIcon("window", px)
 
+proc screenAt(x, y: int): (int, int) =
+  ## The screen's pixels of a point of the desktop's (the kit's pixels).
+  (x * max(1, pxScale), y * max(1, pxScale))
+
+proc iconMenu(c: Client; x, y: int; above = false) =
+  ## The menu of a minimized window's icon, over every window (`above`: its
+  ## bottom at `y`, over the icon, as 3.1 opened it).
+  let (sx, sy) = screenAt(x, y)
+  ui.pressUsed = true                   # (the desktop's own menu not opened too)
+  template its(body: untyped): proc () =
+    proc () =
+      if c in wm.clients: body
+  wm.showMenu(@[
+    wm.menuItem("&Restore", "", true, its(wm.restore(c))),
+    wm.menuItem("Ma&ximize", "", true, its(wm.maximize(c))),
+    wm.menuLine(),
+    wm.menuItem("&Close", "Alt+F4", true, its(wm.close(c))),
+    wm.menuLine(),
+    wm.menuItem("S&witch To...", "Ctrl+Esc", true, proc () = openTaskList())], sx, sy, above)
+
 proc drawIcons() =
   ## The windows minimized, as icons along the bottom, left to right, rows
   ## going up as they fill.
@@ -216,28 +236,52 @@ proc drawIcons() =
         iconSel = -1
         wm.restore(c)
       elif iconSel == i:
-        iconMenuFor = c
-        openPopupMenu("icon", r.x, max(0, r.y - dp(80)))
+        iconMenu(c, r.x, r.y, above = true)
       else:
         iconSel = i
     elif hit.hover and ui.rpressed:
       iconSel = i
-      iconMenuFor = c
-      openPopupMenu("icon", ui.mx, ui.my)
-  popupMenu("icon"):
-    let c = iconMenuFor
-    if c != nil and c in wm.clients:
-      if menuItem("&Restore"): wm.restore(c)
-      if menuItem("Ma&ximize"): wm.maximize(c)
-      menuSeparator()
-      if menuItem("&Close", "Alt+F4"): wm.close(c)
-      menuSeparator()
-      if menuItem("S&witch To...", "Ctrl+Esc"): openTaskList()
+      iconMenu(c, ui.mx, ui.my)
+
+proc desktopMenuItems(): seq[wm.MenuItem] =
+  @[wm.menuItem("&Program Manager", "", true, proc () =
+      let w = findWindow("Program Manager")
+      if w != 0: activate(w) else: launch(selfCommand("progman"))),
+    wm.menuItem("&Task List...", "Ctrl+Esc", true, proc () = openTaskList()),
+    wm.menuItem("&Control Panel", "", true, proc () = launch(selfCommand("control"))),
+    wm.menuItem("T&erminal", "", true, proc () = launch(selfCommand("terminal"))),
+    wm.menuItem("&Run...", "", true, proc () =
+      showRun = true
+      focusRun = true
+      x11Wake()),
+    wm.menuLine(),
+    wm.menuItem("&Cascade", "", true, proc () = wm.cascade()),
+    wm.menuItem("&Tile", "", true, proc () = wm.tile()),
+    wm.menuItem("&Arrange Icons", "", true, proc () =
+      iconSel = -1
+      x11Wake()),
+    wm.menuLine(),
+    wm.menuItem("&About Retro Desktop...", "", true, proc () =
+      showAbout = true
+      x11Wake()),
+    wm.menuItem("E&xit Retro Desktop...", "", true, proc () =
+      showExit = true
+      x11Wake())]
 
 proc desktopMenu() =
   if ui.rpressed and not ui.pressUsed and ui.popup == 0 and ui.dialogTop == 0:
-    openPopupMenu("desktop", ui.mx, ui.my)
+    if managing:
+      # (its own window, over every program's -- the desktop is under them)
+      let (x, y) = screenAt(ui.mx, ui.my)
+      wm.showMenu(desktopMenuItems(), x, y)
+    else:
+      openPopupMenu("desktop", ui.mx, ui.my)
+  if focusRun:
+    focusRun = false
+    focusFirstText(inDialog = true)
   popupMenu("desktop"):
+    # (with no window manager there are no windows over the desktop: the
+    # kit's own menu)
     if menuItem("&Program Manager"):
       let w = findWindow("Program Manager")
       if w != 0: activate(w) else: launch(selfCommand("progman"))
@@ -247,10 +291,6 @@ proc desktopMenu() =
     if menuItem("&Run..."):
       showRun = true
       focusFirstText(inDialog = true)
-    menuSeparator()
-    if menuItem("&Cascade"): wm.cascade()
-    if menuItem("&Tile"): wm.tile()
-    if menuItem("&Arrange Icons"): iconSel = -1
     menuSeparator()
     if menuItem("&About Retro Desktop..."): showAbout = true
     if menuItem("E&xit Retro Desktop..."): showExit = true
@@ -313,7 +353,7 @@ proc keepDialogsInFront() =
 proc dialogs() =
   if showWelcome: welcome()
   if showRun:
-    if inputBox(showRun, "Run", "&Command line:", runText, width = 420) == 1:
+    if inputBox(showRun, "Run", "Command line:", runText, width = 420) == 1:
       if runText.strip.len > 0: launch(runText)
   if showExit:
     if msgBox(showExit, "Exit " & DesktopName, "This will end your " & DesktopName &

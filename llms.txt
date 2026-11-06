@@ -39,6 +39,9 @@ userChrome.css on its own profile), `clock`, `calc`, `calendar`, `cardfile`.
 - Terminal: `vt.nim` (xterm/VT220 escape sequences, scrollback, the
   alternate screen) and `terminal.nim` (a pseudo-terminal, a reader thread
   that wakes the window with an X ClientMessage, drawing in the CGA colors).
+- Menus over the windows (the desktop's, the icons', the control menu) are
+  `wm.showMenu(items, x, y)`: an override-redirect window with the pointer
+  and the keyboard grabbed; letters, arrows, Enter, Esc.
 - Sizes in the window manager are the screen's own pixels: `devScale()` =
   the kit's `dpf(1)` times its pixel zoom `pxScale`.
 

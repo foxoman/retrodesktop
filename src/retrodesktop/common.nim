@@ -10,7 +10,7 @@ import retroui/[svgimport, imaging]
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.3"
+  DesktopVersion* = "0.1.4"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"

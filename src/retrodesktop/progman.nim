@@ -351,7 +351,7 @@ proc dialogs() =
         loadGroups()
     else: showDelete = false
   if showRun:
-    if inputBox(showRun, "Run", "&Command Line:", runText, width = 420) == 1:
+    if inputBox(showRun, "Run", "Command Line:", runText, width = 420) == 1:
       if runText.strip.len > 0: launch(runText)
   if showHelp:
     dialog(showHelp, "Read Me", 560):

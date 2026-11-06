@@ -258,12 +258,18 @@ const
   PMinSize* = 16.clong
   PMaxSize* = 32.clong
   XK_Tab* = 0xff09.culong
+  XK_Return* = 0xff0d.culong
+  XK_Up* = 0xff52.culong
+  XK_Down* = 0xff54.culong
   XK_Escape* = 0xff1b.culong
   XK_F4* = 0xffc1.culong
   XK_Super_L* = 0xffeb.culong
 
 {.push cdecl, dynlib: libX11, importc.}
 proc XOpenDisplay*(name: cstring): Display
+proc XGrabKeyboard*(d: Display; w: Window; ownerEvents: XBool; pointerMode, keyboardMode: cint;
+                    time: Time): cint
+proc XUngrabKeyboard*(d: Display; time: Time): cint
 proc XCloseDisplay*(d: Display): cint
 proc XSelectInput*(d: Display; w: Window; mask: clong): cint
 proc XQueryTree*(d: Display; w: Window; root, parent: ptr Window; children: ptr ptr UncheckedArray[Window];
@@ -307,6 +313,7 @@ proc XAllowEvents*(d: Display; mode: cint; time: Time): cint
 proc XGrabKey*(d: Display; keycode: cint; modifiers: cuint; w: Window; ownerEvents: XBool;
                pointerMode, keyboardMode: cint): cint
 proc XKeysymToKeycode*(d: Display; keysym: culong): uint8
+proc XLookupKeysym*(e: ptr XKeyEvent; index: cint): culong
 proc XQueryPointer*(d: Display; w: Window; root, child: ptr Window; rx, ry, wx, wy: ptr cint;
                     mask: ptr cuint): XBool
 proc XSync*(d: Display; discard_events: XBool): cint

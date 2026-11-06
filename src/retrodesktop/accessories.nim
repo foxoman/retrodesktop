@@ -467,7 +467,7 @@ proc runCardfile*() =
         if editArea(cards[cardSel].body, -1): saveCards()
     statusbar($cards.len & " cards")
     if showCardFind:
-      if inputBox(showCardFind, "Go To", "&Go to (a word on a card):", cardFind) == 1:
+      if inputBox(showCardFind, "Go To", "Go to (a word on a card):", cardFind) == 1:
         let w = cardFind.toLowerAscii
         for i in 0 ..< cards.len:
           let k = (cardSel + 1 + i) mod cards.len

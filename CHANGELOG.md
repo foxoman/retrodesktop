@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.4
+
+- **Fixed: the desktop's menu opened under the windows.** The desktop is
+  under every window, and its menu was drawn on it; the menu (and the menu
+  of a minimized window's icon) is now a window of its own, over all of
+  them, as the control menu is.
+- **Menus as 3.1 had them**: the underlined letter chooses an item, Up and
+  Down move, Enter chooses, Esc closes; a right click let go where it was
+  pressed leaves the menu open, pressed, moved to an item and let go picks
+  it.
+- **Fixed: the Terminal's About box and its menus did not close or
+  answer.** The Terminal's screen took the clicks meant for them.
+- **The Terminal opens in Windows' colors** (black on white); MS-DOS
+  Prompt's gray on black is in Settings.
+- Run's and Cardfile's Go To prompts showed a stray "&".
 ## 0.1.3
 
 - **Retro Browser** (Program Manager > Main > Web Browser, `retro-desktop

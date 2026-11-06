@@ -27,7 +27,7 @@ one program of about 5 MB, nothing to set up.
   GIMP, LibreOffice...). File > New puts in programs of your own; StartUp
   starts them with the desktop.
 - **Terminal**, the desktop's own: the shell in a PC's 16 text colors
-  (MS-DOS Prompt's gray on black, or black on white), for everything from
+  (black on white, as Windows had it, or MS-DOS Prompt's gray on black), for everything from
   `ls` to vim, nano, htop and mc -- xterm's escape sequences, 256 and 24-bit
   colors, the mouse, a scrollback, copy and paste (Ctrl+Shift+C, V).
 
@@ -69,7 +69,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.3_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.4_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -118,9 +118,10 @@ issue. `pkill retro-desktop` ends the desktop and all its programs.
 | Ctrl+Shift+C, Ctrl+Shift+V | copy and paste in the Terminal |
 | Shift+PgUp, Shift+PgDn | the Terminal's scrollback |
 
-A right click on the desktop (a finger held on it) opens its menu: Program
-Manager, Task List, Control Panel, Run..., Cascade, Tile, Arrange Icons,
-Exit. Double click a title bar to maximize a window; double click its
+A right click on the desktop (a finger held on it) opens its menu, over
+every window: Program Manager, Task List, Control Panel, Terminal, Run...,
+Cascade, Tile, Arrange Icons, Exit. Menus work as 3.1's: the underlined
+letter chooses an item, the arrows and Enter too, Esc closes. Double click a title bar to maximize a window; double click its
 control-menu box to close it.
 
 Every part is also a command: `retro-desktop progman`, `control`,
@@ -163,7 +164,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.3 && git push origin v0.1.3`).
+tag is pushed (`git tag v0.1.4 && git push origin v0.1.4`).
 
 ## How it works
 
