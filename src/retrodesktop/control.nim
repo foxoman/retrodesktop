@@ -216,7 +216,7 @@ proc aboutDialog() =
     row:
       let s = dp(48)
       let r = canvas(s + dp(8), s)
-      drawBitmap(rect(r.x, r.y, s, s), appIcon("logo", int(round(dpf(48.0)))))
+      drawBitmap(rect(r.x, r.y, s, s), appIcon("logo", devPx(48.0)))
       col:
         heading DesktopName & " " & DesktopVersion
         label "A Windows 3.1 style desktop for Linux and Termux"
@@ -250,7 +250,7 @@ proc runControl*() =
         if menuItem("E&xit"): quitApp()
       menu "&Help":
         if menuItem("&About Control Panel..."): showAboutCp = true
-    let px = int(round(dpf(32.0)))
+    let px = devPx(32.0)
     let ev = iconView(applets.len,
       proc (i: int): string = $applets[i],
       proc (i: int; r: Rect) =

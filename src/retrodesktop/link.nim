@@ -41,7 +41,10 @@ proc desktopRunning*(): bool =
   let r = rootOf(d)
   let c = propLongs(d, r, atom(d, "_NET_SUPPORTING_WM_CHECK"), XA_WINDOW)
   if c.len == 0: return false
-  propText(d, Window(c[0]), atom(d, "_NET_WM_NAME")) == DesktopName
+  var name = ""
+  trapErrors(d):
+    name = propText(d, Window(c[0]), atom(d, "_NET_WM_NAME"))
+  not xTrapped and name == DesktopName
 
 proc sendToRoot(kind: Atom; win: Window; a0, a1, a2: clong) =
   let d = display()
@@ -74,15 +77,17 @@ proc windows*(): seq[WinInfo] =
   let pidAtom = atom(d, "_NET_WM_PID")
   let state = atom(d, "_NET_WM_STATE")
   let hidden = clong(atom(d, "_NET_WM_STATE_HIDDEN"))
-  for w in propLongs(d, r, atom(d, "_NET_CLIENT_LIST_STACKING"), XA_WINDOW):
-    let win = Window(w)
-    if win == me: continue
-    var t = propText(d, win, netName)
-    if t.len == 0: t = propText(d, win, XA_WM_NAME)
-    let p = propLongs(d, win, pidAtom, XA_CARDINAL)
-    result.add WinInfo(win: win, title: (if t.len > 0: t else: "Untitled"),
-                       pid: (if p.len > 0: int(p[0]) else: 0),
-                       iconic: hidden in propLongs(d, win, state, XA_ATOM))
+  # (a window may close while it is asked about: its error is no error)
+  trapErrors(d):
+    for w in propLongs(d, r, atom(d, "_NET_CLIENT_LIST_STACKING"), XA_WINDOW):
+      let win = Window(w)
+      if win == me: continue
+      var t = propText(d, win, netName)
+      if t.len == 0: t = propText(d, win, XA_WM_NAME)
+      let p = propLongs(d, win, pidAtom, XA_CARDINAL)
+      result.add WinInfo(win: win, title: (if t.len > 0: t else: "Untitled"),
+                         pid: (if p.len > 0: int(p[0]) else: 0),
+                         iconic: hidden in propLongs(d, win, state, XA_ATOM))
 
 proc activate*(w: Window) =
   ## Brings `w` to the front (restored when it is an icon).
@@ -171,3 +176,19 @@ proc processMemory*(pid: int): int64 =
         return n * 1024
   except CatchableError: discard
   0
+
+proc sendRetroCommand*(n: int) =
+  ## `retroCommand` from a program with no window of its own (a script, the
+  ## checks): `retro-desktop --retro-command 1` cascades.
+  let d = XOpenDisplay(nil)
+  if d == nil: return
+  let r = rootOf(d)
+  var e: XEvent
+  e.xclient.theType = ClientMessage
+  e.xclient.window = r
+  e.xclient.messageType = atom(d, "_RETRO_DESKTOP")
+  e.xclient.format = 32
+  e.xclient.data[0] = clong(n)
+  discard XSendEvent(d, r, 0, SubstructureRedirectMask or SubstructureNotifyMask, addr e)
+  discard XSync(d, 0)
+  discard XCloseDisplay(d)

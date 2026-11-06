@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.1
+
+- **Terminal**, the desktop's own: a shell in a window in a PC's 16 text
+  colors (MS-DOS Prompt's gray on black, or black on white), chunky bold
+  letters, the line-drawing characters drawn whole. xterm's escape
+  sequences for full-screen programs (vim, nano, htop, mc, less, top), 256
+  and 24-bit colors, mouse reports, bracketed paste; a scrollback (the
+  wheel, Shift+PgUp); selecting with the mouse (a double click: a word),
+  Ctrl+Shift+C and Ctrl+Shift+V. It takes no CPU while nothing happens. In
+  Program Manager's Main group and the desktop's menu, and programs whose
+  desktop entry asks for a terminal open in it (`retro-desktop terminal -e
+  command`).
+- **Fixed: Cascade ended the desktop** (the windows were reordered while
+  they were walked; a window's record was freed under it). Tile, closing all
+  the windows and the rest walk a copy now.
+- **Fixed: everything small on a 2K tablet.** The window frames and the dpi
+  other programs are told now count the toolkit's pixel zoom: frames, title
+  bars and every program at the screen's own size. The X resources an
+  earlier desktop left on the server (its dpi) are cleared when the desktop
+  starts, so they are not taken for the screen's.
+- **Fixed: starting again after a desktop that ended** stopped with
+  BadWindow (its check window was gone); Task List no longer stops when a
+  window closes while it reads the list.
+- Termux is kept awake from the moment the desktop starts (before, only
+  after the welcome): without it Android pauses Termux behind Termux:X11
+  and Termux:X11 says "X server stalled".
+- Windows of the desktop's programs open as large as the size chosen in
+  Control Panel; `retro-desktop --retro-command n` for scripts.
+
 ## 0.1.0
 
 The first release: a Windows 3.1 style desktop for Termux on Android

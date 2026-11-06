@@ -81,14 +81,13 @@ Architecture: $ARCH
 Maintainer: Sultan Al Isaiee <sultan@foxoman.net>
 Installed-Size: $SIZE
 Depends: libx11, termux-x11-nightly
-Suggests: xfce4-terminal, aterm
 Homepage: https://github.com/foxoman/retrodesktop
 Description: A Windows 3.1 style desktop for Termux:X11
  Retro Desktop is a desktop and window manager in the style of Windows 3.1
  for Termux on Android (Termux:X11): every X11 program in a 3.1 frame,
- Program Manager with the programs you install, Clock, Calculator,
- Calendar, Cardfile, Control Panel, Task List, File Manager, Paintbrush,
- Board and Notepad. Start it with: retro-desktop
+ Program Manager with the programs you install, Terminal, Clock,
+ Calculator, Calendar, Cardfile, Control Panel, Task List, File Manager,
+ Paintbrush, Board and Notepad. Start it with: retro-desktop
 CTL
 mkdir -p build
 OUT=build/retro-desktop_${VERSION}_$ARCH.deb

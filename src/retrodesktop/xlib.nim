@@ -389,3 +389,23 @@ proc setText*(d: Display; w: Window; prop, kind: Atom; text: string) =
   var t = text
   discard XChangeProperty(d, w, prop, kind, 8, PropModeReplace,
                           (if t.len > 0: addr t[0] else: nil), cint(t.len))
+
+# ---- errors that are no error ---------------------------------------------------------------------
+
+var xTrapped*: bool
+  ## an X error came while `trapErrors` ran
+
+proc xTrap(d: Display; e: ptr XErrorEvent): cint {.cdecl.} =
+  xTrapped = true
+  0
+
+template trapErrors*(d: Display; body: untyped) =
+  ## Runs `body` with X errors caught instead of ending the program (Xlib's
+  ## own handler exits): asking about a window that is gone -- one that
+  ## closed a moment ago, the check window of a desktop that ended -- is not
+  ## a reason to stop. `xTrapped` says whether one came.
+  let oldHandler = XSetErrorHandler(xTrap)
+  xTrapped = false
+  body
+  discard XSync(d, 0)
+  discard XSetErrorHandler(oldHandler)

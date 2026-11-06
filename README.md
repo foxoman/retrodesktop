@@ -26,6 +26,13 @@ one program of about 5 MB, nothing to set up.
   installed with a desktop entry is there by itself (Firefox, VS Code,
   GIMP, LibreOffice...). File > New puts in programs of your own; StartUp
   starts them with the desktop.
+- **Terminal**, the desktop's own: the shell in a PC's 16 text colors
+  (MS-DOS Prompt's gray on black, or black on white), for everything from
+  `ls` to vim, nano, htop and mc -- xterm's escape sequences, 256 and 24-bit
+  colors, the mouse, a scrollback, copy and paste (Ctrl+Shift+C, V).
+
+  ![Terminal](docs/terminal.png)
+
 - **The accessories:** Clock, Calculator, Calendar (with appointments and
   notes), Cardfile, Task List (Ctrl+Esc: every window and the memory its
   program takes; End Task ends one that hangs), Control Panel.
@@ -57,7 +64,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.0_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.1_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -96,6 +103,8 @@ Android stops programs it thinks you do not use. For a desktop that stays:
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
 | Ctrl+Esc | Task List |
+| Ctrl+Shift+C, Ctrl+Shift+V | copy and paste in the Terminal |
+| Shift+PgUp, Shift+PgDn | the Terminal's scrollback |
 
 A right click on the desktop (a finger held on it) opens its menu: Program
 Manager, Task List, Control Panel, Run..., Cascade, Tile, Arrange Icons,
@@ -103,7 +112,8 @@ Exit. Double click a title bar to maximize a window; double click its
 control-menu box to close it.
 
 Every part is also a command: `retro-desktop progman`, `control`,
-`tasklist`, `clock`, `calc`, `calendar`, `cardfile`.
+`tasklist`, `terminal` (`terminal -e command` runs a command in it),
+`clock`, `calc`, `calendar`, `cardfile`.
 
 ## On a Linux computer
 
@@ -140,7 +150,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.0 && git push origin v0.1.0`).
+tag is pushed (`git tag v0.1.1 && git push origin v0.1.1`).
 
 ## How it works
 

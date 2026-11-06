@@ -4,12 +4,12 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils, tables, algorithm]
+import std/[os, strutils, tables, algorithm, math]
 import retroui
 import retroui/[svgimport, imaging]
 
 const
-  DesktopVersion* = "0.1.0"
+  DesktopVersion* = "0.1.1"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -68,6 +68,17 @@ proc applyDesktopLook*() =
   if s.hasKey("size"):
     try: setUiScale(parseInt(s["size"])) except ValueError: discard
 
+proc devScale*(): float =
+  ## The screen's own pixels per design pixel: the kit's scale times its
+  ## pixel zoom (2 on a 2K tablet, where each logical pixel is drawn 2 x 2).
+  ## X windows, icons made for the screen and the dpi other programs are
+  ## told are in these.
+  dpf(1.0) * float(max(1, pxScale))
+
+proc devPx*(v: float): int =
+  ## `v` design pixels in the screen's own pixels.
+  max(1, int(round(v * devScale())))
+
 proc onOff*(s: Settings; key: string; default: bool): bool =
   ## A setting that is "on", "off" or "auto" (`default`).
   case s.setting(key, "auto")
@@ -102,20 +113,14 @@ proc companion*(name: string): string =
   findExe(name)
 
 proc terminalCommand*(): string =
-  ## A terminal emulator that is installed, as a command that runs what follows
-  ## its "-e" ("" when there is none).
-  for t in ["xfce4-terminal", "lxterminal", "mate-terminal", "gnome-terminal", "konsole",
-            "qterminal", "aterm", "urxvt", "st", "xterm"]:
-    let p = findExe(t)
-    if p.len > 0: return p
-  ""
+  ## The desktop's Terminal, as a command line that runs what follows its
+  ## "-e" in it.
+  selfCommand("terminal")
 
 proc runCommand*(e: AppEntry): string =
-  ## The command line that starts `e` (in a terminal when it asks for one).
-  if e.terminal:
-    let t = terminalCommand()
-    if t.len > 0: return quoteShell(t) & " -e " & e.command
-  e.command
+  ## The command line that starts `e` (in the Terminal when it asks for one).
+  if e.terminal: terminalCommand() & " -e " & e.command
+  else: e.command
 
 # ---- installed programs ---------------------------------------------------------------------------
 

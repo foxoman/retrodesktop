@@ -51,6 +51,7 @@ Every program opens in its own window on the desktop.
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes the window in front |
 | Ctrl+Esc | the Task List: every window, how much memory each takes |
+| Ctrl+Shift+C, V | copy and paste in the Terminal |
 
 ## Program Manager
 
@@ -73,7 +74,7 @@ var
   icons: Table[string, Bitmap]
   minimizeOnUse = false
   saveOnExit = true
-  showNew, showProps, showRun, showAbout, showHelp, showDelete, showNoTerm: bool
+  showNew, showProps, showRun, showAbout, showHelp, showDelete: bool
   newName, newCommand, newIcon: string
   newGroup = 0
   propsGroup: Group
@@ -143,9 +144,8 @@ proc loadGroups() =
                    "Colors, fonts, sizes, the desktop")
   main.add builtin("Task List", selfCommand("tasklist"), "tasklist",
                    "The windows open, and the memory each takes")
-  let term = terminalCommand()
-  main.add builtin("Terminal", (if term.len > 0: quoteShell(term) else: "?terminal"), "terminal",
-                   "A terminal: a shell's command line")
+  main.add builtin("Terminal", selfCommand("terminal"), "terminal",
+                   "The shell's command line, in a PC's 16 text colors")
   main.add builtin("Read Me", "?help", "readme", "How the desktop works")
   companionItem("Notepad", "retro-notepad", "notepad", "Text files", acc)
   companionItem("Paintbrush", "retro-photo", "paint", "Retro Photo: pictures and painting", acc)
@@ -200,19 +200,16 @@ proc pictureOf(it: Item; px: int): Bitmap =
 proc start(it: Item) =
   case it.command
   of "?help": showHelp = true
-  of "?terminal": showNoTerm = true
   else:
     var cmd = it.command
-    if it.terminal:
-      let t = terminalCommand()
-      if t.len > 0: cmd = quoteShell(t) & " -e " & cmd
+    if it.terminal: cmd = terminalCommand() & " -e " & cmd
     launch(cmd)
     if minimizeOnUse: minimizeSelf()
 
 # ---- the frame ----------------------------------------------------------------------------------------
 
 proc groupView(g: Group) =
-  let px = int(round(dpf(32.0)))
+  let px = devPx(32.0)
   if g.marked.len != g.items.len: g.marked = newSeq[bool](g.items.len)
   let ev = iconView(g.items.len,
     proc (i: int): string = g.items[i].name,
@@ -325,7 +322,7 @@ proc dialogs() =
       row:
         let s = dp(32)
         let r = canvas(s + dp(8), s)
-        drawBitmap(rect(r.x, r.y, s, s), pictureOf(it, int(round(dpf(32.0)))))
+        drawBitmap(rect(r.x, r.y, s, s), pictureOf(it, devPx(32.0)))
         heading it.name
       form 0:
         field "Command Line:": label(it.command, literal = true)
@@ -353,10 +350,6 @@ proc dialogs() =
   if showRun:
     if inputBox(showRun, "Run", "&Command Line:", runText, width = 420) == 1:
       if runText.strip.len > 0: launch(runText)
-  if showNoTerm:
-    discard msgBox(showNoTerm, "Terminal",
-                   "No terminal is installed. In Termux: pkg install xfce4-terminal " &
-                   "(or aterm); on Linux, any terminal your system has.", ["OK"], miInfo)
   if showHelp:
     dialog(showHelp, "Read Me", 560):
       markdownView(HelpText, height = dp(360))

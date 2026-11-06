@@ -17,14 +17,16 @@ const
 
 proc density(): float =
   ## The screen's own scale (2.0 on a 320 dpi tablet), without the size the
-  ## user chose in Control Panel.
-  max(0.25, dpf(1.0) * 100 / float(max(1, uiScale())))
+  ## user chose in Control Panel: the screen's pixels per design pixel over
+  ## that size.
+  max(0.25, devScale() * 100 / float(max(1, uiScale())))
 
 proc fontPoints*(): int =
   ## The UI's text size in points at 96 dpi -- the text size and the size of
   ## everything the user chose in it (the screen's density comes on top,
-  ## from the dpi).
-  max(7, int(round(textSize() / density() * 72 / 96)))
+  ## from the dpi). (`textSize` is in logical pixels: `pxScale` of the
+  ## screen's each.)
+  max(7, int(round(textSize() * float(max(1, pxScale)) / density() * 72 / 96)))
 
 proc dpiNow*(): int =
   ## The dots per inch programs are told: the screen's density (96 at 100 %).
@@ -163,15 +165,23 @@ proc childEnvironment*() =
   putEnv("GTK_CSD", "0")
   putEnv("NO_AT_BRIDGE", "1")
   if not existsEnv("QT_QPA_PLATFORMTHEME"): putEnv("QT_QPA_PLATFORMTHEME", "gtk3")
-  putEnv("XCURSOR_SIZE", $max(16, int(round(16 * dpf(1.0)))))
+  putEnv("XCURSOR_SIZE", $max(16, devPx(16)))
   putEnv("RETRO_THEME", desktopSettings().setting("scheme", "Classic"))
+
+proc ownResources*(d: Display): bool =
+  ## The X resources on the screen are the ones the desktop put there (a
+  ## desktop before this one, on the same X server).
+  let root = XRootWindow(d, XDefaultScreen(d))
+  let r = propText(d, root, atom(d, "RESOURCE_MANAGER"))
+  "Retro Desktop's" in r or "*faceName:\tFreeSans" in r
 
 proc setResources*(d: Display; t: Theme) =
   ## The X resources on the root window (RESOURCE_MANAGER): the density for
   ## Qt, Xft and the rest; fonts and colors for old X programs.
   let root = XRootWindow(d, XDefaultScreen(d))
-  let res = "Xft.dpi:\t" & $dpiNow() & "\nXft.antialias:\t1\nXft.hinting:\t1\nXft.hintstyle:\thintslight\n" &
-    "Xft.rgba:\tnone\nXcursor.size:\t" & $max(16, int(round(16 * dpf(1.0)))) & "\n" &
+  let res = "! Retro Desktop's (it puts them back each time it starts)\n" &
+    "Xft.dpi:\t" & $dpiNow() & "\nXft.antialias:\t1\nXft.hinting:\t1\nXft.hintstyle:\thintslight\n" &
+    "Xft.rgba:\tnone\nXcursor.size:\t" & $max(16, devPx(16)) & "\n" &
     "*background:\t" & hexOf(t.face) & "\n*foreground:\t" & hexOf(t.text) & "\n" &
     "*faceName:\tFreeSans\n*faceSize:\t" & $fontPoints() & "\n" &
     "XTerm*faceName:\tFreeMono\nXTerm*faceSize:\t" & $(fontPoints() + 1) & "\n" &
@@ -232,7 +242,7 @@ proc startXSettings*(d: Display) =
   let blob = xsettingsBlob(
     [("Xft/DPI", dpiNow() * 1024), ("Xft/Antialias", 1), ("Xft/Hinting", 1),
      ("Net/DoubleClickTime", 500), ("Gtk/DialogsUseHeader", 0), ("Gtk/EnableAnimations", 0),
-     ("Gtk/CursorThemeSize", max(16, int(round(16 * dpf(1.0))))), ("Net/EnableEventSounds", 0)],
+     ("Gtk/CursorThemeSize", max(16, devPx(16))), ("Net/EnableEventSounds", 0)],
     [("Net/ThemeName", ThemeName), ("Gtk/FontName", "FreeSans " & $fontPoints()),
      ("Gtk/MonospaceFontName", "FreeMono " & $(fontPoints() + 1)), ("Xft/HintStyle", "hintslight"),
      ("Xft/RGBA", "none"), ("Gtk/DecorationLayout", "menu:minimize,maximize")])

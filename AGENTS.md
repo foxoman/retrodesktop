@@ -20,7 +20,8 @@ alike.
   - `session.nim` -- the desktop: background, icons, menu, welcome, exit,
     memory
   - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
-    Cardfile), `control.nim`, `tasklist.nim` -- the programs
+    Cardfile), `control.nim`, `tasklist.nim`, `terminal.nim` -- the programs
+  - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing
   - `theming.nim` -- the look given to other programs (XSETTINGS, X
     resources, fontconfig, the GTK theme)
   - `link.nim` -- how the programs talk to the desktop (EWMH messages,
@@ -49,10 +50,15 @@ alike.
    returns false for every event of the desktop's own window and for events
    without a window (the keyboard's, extensions'); the rest are the
    manager's.
-6. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
+6. **Pixels:** the window manager's X windows are in the screen's own pixels
+   (`devPx`, `devScale`: the kit's scale times its pixel zoom `pxScale`);
+   the kit's drawing is in logical pixels (`dp`). Never walk `clients` while
+   something can reorder it (`snapshot()`), and read the properties of
+   windows that may be gone inside `trapErrors`.
+7. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
    that keeps the CPU awake when nothing changes (`wakeIn` only as needed),
    memory let go when the phone runs short (`onMemoryPressure`).
-7. Retro Desktop's own versions: `DesktopVersion` in
+8. Retro Desktop's own versions: `DesktopVersion` in
    `src/retrodesktop/common.nim` and `version` in `retrodesktop.nimble`, the
    same.
-8. Never commit build output (`build/`, `bin/`, `.deb`).
+9. Never commit build output (`build/`, `bin/`, `.deb`).

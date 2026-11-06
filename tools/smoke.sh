@@ -1,7 +1,8 @@
 #!/bin/sh
 # A quick check of the desktop on a screen of its own (Xvfb): it starts,
-# manages an X program's window (xclock), opens Program Manager and the
-# accessories, and the screen is saved as build/smoke.png.
+# manages an X program's window (xclock), opens Program Manager, the
+# accessories and the Terminal, cascades and tiles them, and the screen is
+# saved as build/smoke.png.
 #
 #   sh tools/smoke.sh [the retro-desktop program]
 #
@@ -31,8 +32,15 @@ DESK=$!
 sleep 3
 xclock &
 sleep 1
-"$BIN" clock & "$BIN" calc & "$BIN" calendar & "$BIN" control &
+"$BIN" clock & "$BIN" calc & "$BIN" calendar & "$BIN" control & SHELL=/bin/sh "$BIN" terminal &
 sleep 4
+# (cascade and tile, as Task List asks: the desktop has to be there after)
+for n in 1 2 1 2; do
+  xprop -root >/dev/null
+  "$BIN" --retro-command $n
+  sleep 0.5
+done
+kill -0 $DESK
 WM=$(xprop -root _NET_SUPPORTING_WM_CHECK | sed 's/.*# //')
 NAME=$(xprop -id "$WM" _NET_WM_NAME | sed 's/.*= //')
 LIST=$(xprop -root _NET_CLIENT_LIST)
@@ -41,7 +49,7 @@ echo "$LIST"
 mkdir -p build
 import -window root build/smoke.png
 COUNT=$(echo "$LIST" | tr ',' '\n' | grep -c 0x || true)
-if [ "$NAME" != '"Retro Desktop"' ] || [ "$COUNT" -lt 6 ]; then
+if [ "$NAME" != '"Retro Desktop"' ] || [ "$COUNT" -lt 7 ]; then
   echo "smoke test failed: $COUNT windows managed"
   exit 1
 fi

@@ -116,7 +116,7 @@ proc drawBackground() =
   let full = rect(0, 0, ui.w, ui.h)
   fill(full, deskColor)
   if patternName != "(None)" and patternName.len > 0:
-    let dot = max(1, int(round(dpf(1.0))))
+    let dot = devPx(1.0)
     if tile == nil:
       let ink = if deskColor.r.int + deskColor.g.int + deskColor.b.int > 380: color(0, 0, 0)
                 else: color(0, 0, 0)
@@ -124,7 +124,7 @@ proc drawBackground() =
     if tile != nil:
       # (the tile at the screen's own pixels: its logical size is its pixels
       # over the density)
-      let side = max(1, int(round(float(tile.w) / max(0.01, dpf(1.0)))))
+      let side = max(1, tile.w div max(1, pxScale))
       var y = 0
       while y < ui.h:
         var x = 0
@@ -133,16 +133,16 @@ proc drawBackground() =
           x += side
         y += side
   if wallPath.len > 0 and fileExists(wallPath) and not lowMemory:
-    let dw = int(round(float(ui.w) * dpf(1.0)))
-    let dh = int(round(float(ui.h) * dpf(1.0)))
+    let dw = ui.w * max(1, pxScale)
+    let dh = ui.h * max(1, pxScale)
     if wall == nil or wallFor != (dw, dh):
       wallFor = (dw, dh)
       try: wall = loadPicture(wallPath, max(64, dw), max(64, dh))
       except CatchableError: wall = nil
       if wall == nil: wallPath = ""
     if wall != nil and wall.w > 0 and wall.h > 0:
-      let iw = float(wall.w) / dpf(1.0)
-      let ih = float(wall.h) / dpf(1.0)
+      let iw = float(wall.w) / float(max(1, pxScale))
+      let ih = float(wall.h) / float(max(1, pxScale))
       case wallMode
       of "center":
         drawBitmap(rect(int((float(ui.w) - iw) / 2), int((float(ui.h) - ih) / 2), int(iw), int(ih)), wall)
@@ -166,8 +166,9 @@ proc drawBackground() =
         popClip()
 
 proc iconOf(c: Client; size: int): Bitmap =
-  let b = c.readIcon(int(round(float(size) * dpf(1.0))))
-  if b != nil: b else: appIcon("window", int(round(float(size) * dpf(1.0))))
+  let px = size * max(1, pxScale)
+  let b = c.readIcon(px)
+  if b != nil: b else: appIcon("window", px)
 
 proc drawIcons() =
   ## The windows minimized, as icons along the bottom, left to right, rows
@@ -230,6 +231,7 @@ proc desktopMenu() =
       if w != 0: activate(w) else: launch(selfCommand("progman"))
     if menuItem("&Task List...", "Ctrl+Esc"): openTaskList()
     if menuItem("&Control Panel"): launch(selfCommand("control"))
+    if menuItem("T&erminal"): launch(selfCommand("terminal"))
     if menuItem("&Run..."):
       showRun = true
       focusFirstText(inDialog = true)
@@ -272,7 +274,7 @@ proc welcome() =
       spring()
       if button("OK", isDefault = true):
         showWelcome = false
-  if not showWelcome and conf.setting("welcomed", "") != DesktopVersion:
+  if not showWelcome and conf.setting("welcomed", "") == "":
     conf["welcomed"] = DesktopVersion
     if inTermux():
       conf["wakeLock"] = (if welcomeAwake: "on" else: "off")
@@ -333,7 +335,10 @@ proc watchMemory() =
 # ---- the session --------------------------------------------------------------------------------------
 
 proc desktopShown(): bool =
-  ## Retro Desktop runs on this screen already (another session).
+  ## Retro Desktop runs on this screen already (another session). When it
+  ## does not, the X resources a desktop before left on the server go: the
+  ## kit would take their dpi for the screen's (and this desktop puts its
+  ## own back once it knows the screen).
   var name = getEnv("DISPLAY")
   if name.len == 0 and inTermux(): name = ":0"
   if name.len == 0: return false
@@ -342,7 +347,14 @@ proc desktopShown(): bool =
   let r = XRootWindow(d, XDefaultScreen(d))
   let c = propLongs(d, r, atom(d, "_NET_SUPPORTING_WM_CHECK"), XA_WINDOW)
   if c.len > 0:
-    result = propText(d, Window(c[0]), atom(d, "_NET_WM_NAME")) == DesktopName
+    # (the check window of a desktop that ended is gone: an error, no desktop)
+    var name = ""
+    trapErrors(d):
+      name = propText(d, Window(c[0]), atom(d, "_NET_WM_NAME"))
+    result = not xTrapped and name == DesktopName
+  if not result and ownResources(d):
+    discard XDeleteProperty(d, r, atom(d, "RESOURCE_MANAGER"))
+    discard XSync(d, 0)
   discard XCloseDisplay(d)
 
 proc runSession*() =
@@ -365,8 +377,11 @@ proc runSession*() =
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
-  if conf.setting("welcomed", "") != DesktopVersion: showWelcome = true
-  elif conf.setting("wakeLock", "on") == "on": wakeLock(true)
+  # (Termux awake from the start: Android stops a Termux without it as soon
+  # as Termux:X11 is in front -- "X server stalled")
+  if conf.setting("wakeLock", "on") == "on": wakeLock(true)
+  # (the welcome the first time only, not again after an update)
+  if conf.setting("welcomed", "") == "": showWelcome = true
   var started = false
   while beginFrame():
     # (the first time, the welcome first: Program Manager comes after it)

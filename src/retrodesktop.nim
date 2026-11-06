@@ -7,7 +7,7 @@
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
 import std/[os, strutils]
-import retrodesktop/[common, session, progman, accessories, control, tasklist]
+import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal]
 
 proc usage() =
   echo DesktopName, " ", DesktopVersion, " -- a Windows 3.1 style desktop"
@@ -16,6 +16,7 @@ proc usage() =
   echo "  retro-desktop progman     Program Manager"
   echo "  retro-desktop control     Control Panel"
   echo "  retro-desktop tasklist    Task List"
+  echo "  retro-desktop terminal    Terminal (-e command: runs it in the Terminal)"
   echo "  retro-desktop clock       Clock"
   echo "  retro-desktop calc        Calculator"
   echo "  retro-desktop calendar    Calendar"
@@ -27,10 +28,22 @@ when isMainModule:
   of "", "session", "desktop": runSession()
   of "progman": runProgman()
   of "control": runControl()
+  of "terminal":
+    # (retro-desktop terminal -e command...: the command, not a shell)
+    var args: seq[string]
+    var i = 2
+    if paramCount() >= 2 and paramStr(2) == "-e": i = 3
+    if i == 3:
+      for k in 3 .. paramCount(): args.add paramStr(k)
+    runTerminal(args)
   of "tasklist", "tasks": runTaskList()
   of "clock": runClock()
   of "calc", "calculator": runCalc()
   of "calendar": runCalendar()
   of "cardfile": runCardfile()
   of "--version", "-v", "version": echo DesktopName, " ", DesktopVersion
+  of "--retro-command":
+    # (for scripts and the checks: asks the desktop to cascade (1), tile (2),
+    # arrange icons (3), take the look again (4), exit (5))
+    if paramCount() >= 2: sendRetroCommand(parseInt(paramStr(2)))
   else: usage()

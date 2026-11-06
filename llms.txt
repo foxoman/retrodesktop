@@ -7,8 +7,8 @@
 One program, `retro-desktop`: with no argument the desktop (the window
 manager, the desktop's background, minimized windows as icons, its menu);
 with an argument one of its programs: `progman` (Program Manager),
-`control` (Control Panel), `tasklist` (Task List), `clock`, `calc`,
-`calendar`, `cardfile`.
+`control` (Control Panel), `tasklist` (Task List), `terminal` (Terminal;
+`-e command` runs a command), `clock`, `calc`, `calendar`, `cardfile`.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
@@ -27,7 +27,13 @@ with an argument one of its programs: `progman` (Program Manager),
   `_RETRO_DESKTOP` (1 cascade, 2 tile, 3 arrange icons, 4 the look changed,
   5 exit, 6 ask to exit) and EWMH's `_NET_ACTIVE_WINDOW`,
   `_NET_CLOSE_WINDOW`; they follow the look through the root's
-  `_RETRO_DESKTOP_LOOK` property.
+  `_RETRO_DESKTOP_LOOK` property. `retro-desktop --retro-command n` sends
+  `_RETRO_DESKTOP` n from a script.
+- Terminal: `vt.nim` (xterm/VT220 escape sequences, scrollback, the
+  alternate screen) and `terminal.nim` (a pseudo-terminal, a reader thread
+  that wakes the window with an X ClientMessage, drawing in the CGA colors).
+- Sizes in the window manager are the screen's own pixels: `devScale()` =
+  the kit's `dpf(1)` times its pixel zoom `pxScale`.
 
 ## Docs
 

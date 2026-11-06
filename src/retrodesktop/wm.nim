@@ -15,7 +15,7 @@ import std/[math, tables, algorithm]
 import retroui
 import retroui/canvas2d
 import retroui/uirelays/drivers/x11_driver
-import xlib
+import xlib, common
 
 type
   Part* = enum
@@ -81,9 +81,18 @@ proc changedNow() =
 
 # ---- sizes and colors -------------------------------------------------------------------------------
 
-proc bw*(): int = max(3, dp(if bigFrames: 6 else: 4))
+proc snapshot(): seq[Client] =
+  ## The windows as a list of their own, to walk while `clients` changes
+  ## (raising one reorders it).
+  for x in clients: result.add x
+
+proc dpx(v: int): int =
+  ## `v` design pixels in the screen's own pixels: X windows are in them.
+  if v <= 1 and v >= -1: v else: devPx(float(v))
+
+proc bw*(): int = max(3, dpx(if bigFrames: 6 else: 4))
   ## The sizing border's width.
-proc tbh*(): int = max(14, dp(if bigFrames: 24 else: 19))
+proc tbh*(): int = max(14, dpx(if bigFrames: 24 else: 19))
   ## The title bar's height.
 proc topOf(): int = bw() + tbh() + 1
   ## From the frame's top to the window's.
@@ -241,7 +250,7 @@ proc drawFrame*(c: Client) =
   fillX(f, b, b + th, tw, 1, t.frame)
 
 proc drawAll() =
-  for c in clients: drawFrame(c)
+  for c in snapshot(): drawFrame(c)
 
 # ---- the window's properties ------------------------------------------------------------------------
 
@@ -275,8 +284,8 @@ proc readHints(c: Client) =
     if (hints.flags and PMinSize) != 0 and (hints.flags and PMaxSize) != 0 and
        hints.minWidth == hints.maxWidth and hints.minHeight == hints.maxHeight and hints.minWidth > 0:
       c.fixed = true
-  c.minW = max(c.minW, dp(60))
-  c.minH = max(c.minH, dp(20))
+  c.minW = max(c.minW, dpx(60))
+  c.minH = max(c.minH, dpx(20))
   let tr = propLongs(dpy, c.win, XA_WM_TRANSIENT_FOR, XA_WINDOW)
   if tr.len > 0: c.transient = Window(tr[0])
 
@@ -375,7 +384,7 @@ proc fitOnScreen(c: Client) =
   let (sw, sh) = screenSize()
   c.w = clamp(c.w, 1, max(1, sw - 2 * bw()))
   c.h = clamp(c.h, 1, max(1, sh - bw() - topOf()))
-  c.x = clamp(c.x, -(c.frameW - dp(60)), sw - dp(60))
+  c.x = clamp(c.x, -(c.frameW - dpx(60)), sw - dpx(60))
   c.y = clamp(c.y, 0, max(0, sh - topOf()))
 
 proc place(c: Client; x, y: int; given: bool) =
@@ -399,22 +408,25 @@ proc place(c: Client; x, y: int; given: bool) =
       c.x = (sw - aw) div 2
       c.y = (sh - ah) div 2
     else:
-      c.x = dp(16) + cascadeAt * step
-      c.y = dp(16) + cascadeAt * step
+      c.x = dpx(16) + cascadeAt * step
+      c.y = dpx(16) + cascadeAt * step
       if c.x + aw > sw or c.y + ah > sh:
         cascadeAt = 0
-        c.x = dp(16)
-        c.y = dp(16)
+        c.x = dpx(16)
+        c.y = dpx(16)
       inc cascadeAt
   fitOnScreen(c)
 
 # ---- focus and order --------------------------------------------------------------------------------
 
 proc raiseClient(c: Client) =
-  let i = clients.find(c)
-  if i >= 0:
-    clients.delete(i)
-    clients.add c
+  # (a new list, `c` last: `c` may be the list's own element -- taken out of
+  # the list in place, it could be freed before it was put back)
+  var order: seq[Client]
+  for x in clients:
+    if x != c: order.add x
+  order.add c
+  clients = order
   discard XRaiseWindow(dpy, c.frame)
   # (its dialogs stay over it)
   for d in clients:
@@ -439,9 +451,10 @@ proc focus*(c: Client) =
   updateClientList()
 
 proc focusTop() =
-  for i in countdown(clients.high, 0):
-    if not clients[i].iconic:
-      focus(clients[i])
+  let l = snapshot()
+  for i in countdown(l.high, 0):
+    if not l[i].iconic:
+      focus(l[i])
       return
   focus(nil)
 
@@ -517,14 +530,14 @@ proc cascade*() =
   ## The windows one over another, from the top left.
   cascadeAt = 0
   let (sw, sh) = screenSize()
-  for c in clients:
+  for c in snapshot():
     if c.iconic or c.fullscreen or c.transient != None: continue
     if c.maximized:
       c.maximized = false
     c.w = min(c.w, sw * 2 div 3)
     c.h = min(c.h, sh * 2 div 3)
-    c.x = dp(16) + cascadeAt * topOf()
-    c.y = dp(16) + cascadeAt * topOf()
+    c.x = dpx(16) + cascadeAt * topOf()
+    c.y = dpx(16) + cascadeAt * topOf()
     inc cascadeAt
     fitOnScreen(c)
     applyGeometry(c)
@@ -536,13 +549,13 @@ proc cascade*() =
 proc tile*() =
   ## The windows side by side, filling the screen.
   var l: seq[Client]
-  for c in clients:
+  for c in snapshot():
     if not c.iconic and not c.fullscreen and c.transient == None and not c.fixed: l.add c
   if l.len == 0: return
   let (sw, sh) = screenSize()
   let cols = int(ceil(sqrt(float(l.len))))
   let rows = (l.len + cols - 1) div cols
-  let reserve = if iconicClients().len > 0: dp(76) else: 0
+  let reserve = if iconicClients().len > 0: dpx(76) else: 0
   for i, c in l:
     let col = i mod cols
     let row = i div cols
@@ -611,10 +624,10 @@ proc drawMenu() =
       cv.fillRect(2, float(y), float(menu.w - 4), float(menu.itemH))
     cv.fillStyle = (if not it.enabled: t.gray elif hot: t.selectText else: t.text)
     cv.textAlign = "left"
-    cv.fillText(it.label, float(dp(14)), float(y + menu.itemH div 2))
+    cv.fillText(it.label, float(dpx(14)), float(y + menu.itemH div 2))
     if it.keys.len > 0:
       cv.textAlign = "right"
-      cv.fillText(it.keys, float(menu.w - dp(10)), float(y + menu.itemH div 2))
+      cv.fillText(it.keys, float(menu.w - dpx(10)), float(y + menu.itemH div 2))
     y += menu.itemH
   putBitmap(menuWin, cv.toBitmap, 0, 0)
 
@@ -641,8 +654,8 @@ proc openMenu*(c: Client; x, y: int) =
     ("Close", "Alt+F4", true, proc () = close(menu.c)),
     ("", "", false, nil),
     ("Switch To...", "Ctrl+Esc", true, proc () = (if taskList != nil: taskList()))]
-  menu.itemH = max(16, dp(if bigFrames: 32 else: 22))
-  menu.w = dp(190)
+  menu.itemH = max(16, dpx(if bigFrames: 32 else: 22))
+  menu.w = dpx(190)
   menu.h = 4
   for it in menu.items: menu.h += (if it.label.len == 0: menu.itemH div 2 else: menu.itemH)
   let (sw, sh) = screenSize()
@@ -719,8 +732,10 @@ proc unmanage(c: Client; destroyed: bool) =
     setWmState(c, 0)
   discard XDestroyWindow(dpy, c.frame)
   shownCursor.del(c.frame)
-  let i = clients.find(c)
-  if i >= 0: clients.delete(i)
+  var rest: seq[Client]
+  for x in clients:
+    if x != c: rest.add x
+  clients = rest
   if menu.c == c: closeMenu()
   if drag.c == c:
     drag.kind = dkNone
@@ -833,13 +848,13 @@ proc moveDrag(rx, ry: int) =
   if c == nil: return
   let dx = rx - drag.rx
   let dy = ry - drag.ry
-  if abs(dx) + abs(dy) > dp(4): moved = true
+  if abs(dx) + abs(dy) > dpx(4): moved = true
   if not moved: return
   case drag.kind
   of dkMove:
     if c.maximized or c.fullscreen: return
     let (sw, sh) = screenSize()
-    c.x = clamp(drag.x + dx, -(c.frameW - dp(40)), sw - dp(40))
+    c.x = clamp(drag.x + dx, -(c.frameW - dpx(40)), sw - dpx(40))
     c.y = clamp(drag.y + dy, 0, max(0, sh - topOf()))
     discard XMoveWindow(dpy, c.frame, cint(c.x), cint(c.y))
   of dkResize:
@@ -962,7 +977,7 @@ proc onConfigureRequest(e: XConfigureRequestEvent) =
 proc screenChanged() =
   ## The screen's size changed (the tablet turned): maximized and full
   ## screen windows follow, the others stay on it.
-  for c in clients:
+  for c in snapshot():
     if c.fullscreen: applyGeometry(c)
     elif c.maximized:
       maximizeGeometry(c)
@@ -1217,7 +1232,7 @@ proc stop*() =
 
 proc closeAll*() =
   ## Asks every program to close its windows (Exit Retro Desktop).
-  for c in clients: close(c)
+  for c in snapshot(): close(c)
 
 proc relook*() =
   ## Draws every frame again (the colors changed).
