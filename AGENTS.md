@@ -1,0 +1,58 @@
+# Working on Retro Desktop
+
+Rules for anyone changing this repository -- people and AI coding agents
+alike.
+
+## The project
+
+- Retro Desktop, a Windows 3.1 style desktop and window manager for Linux
+  and Termux on Android (Termux:X11), by Sultan Al Isaiee (@foxoman) --
+  www.foxoman.net -- sultan@foxoman.net. Repository:
+  https://github.com/foxoman/retrodesktop
+- Made with Retro Nim UI (`retroui`, https://github.com/foxoman/retroui):
+  read its `skills/retroui/SKILL.md` before writing UI code.
+- `src/retrodesktop.nim` -- the program; its first argument says which
+  part it is (none: the desktop; `progman`, `control`, `tasklist`, `clock`,
+  `calc`, `calendar`, `cardfile`).
+- `src/retrodesktop/`:
+  - `wm.nim` -- the window manager (frames, focus, keys, EWMH/ICCCM), on the
+    desktop's X connection through Retro Nim UI's `x11EventHook`
+  - `session.nim` -- the desktop: background, icons, menu, welcome, exit,
+    memory
+  - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
+    Cardfile), `control.nim`, `tasklist.nim` -- the programs
+  - `theming.nim` -- the look given to other programs (XSETTINGS, X
+    resources, fontconfig, the GTK theme)
+  - `link.nim` -- how the programs talk to the desktop (EWMH messages,
+    _RETRO_DESKTOP, following the look)
+  - `common.nim` -- settings, starting programs, desktop entries, icons
+  - `art.nim` -- the desktop's own icons and patterns, drawn at their size
+  - `xlib.nim` -- the Xlib it uses, loaded at run time
+- `tools/build-deb.sh` (the Termux package), `tools/termux-cc.sh` (the
+  aarch64 compiler for it), `tools/smoke.sh` (a check on Xvfb).
+
+## Rules
+
+1. **Voice.** Docs, comments and messages speak as Sultan to users and
+   developers ("I made...", "you can..."), plainly, without marketing.
+2. **Credits** stay Sultan's: "Developed by Sultan Al Isaiee @foxoman --
+   www.foxoman.net -- sultan@foxoman.net" at the top of each source file and
+   in the About boxes.
+3. **Keep the docs with the code:** `README.md`, `CHANGELOG.md` (a section
+   per version, the newest on top), this file, `llms.txt` change with every
+   change that touches what they say.
+4. **Check what you change:** build it (`nim c -d:release -o:bin/retro-desktop
+   src/retrodesktop.nim`), run `sh tools/smoke.sh`, look at the screen
+   (build/smoke.png). For the window manager, try real X programs (xclock,
+   xeyes, xcalc, a GTK program) and xdotool clicks.
+5. **The X connection is shared** with Retro Nim UI's driver: the hook
+   returns false for every event of the desktop's own window and for events
+   without a window (the keyboard's, extensions'); the rest are the
+   manager's.
+6. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
+   that keeps the CPU awake when nothing changes (`wakeIn` only as needed),
+   memory let go when the phone runs short (`onMemoryPressure`).
+7. Retro Desktop's own versions: `DesktopVersion` in
+   `src/retrodesktop/common.nim` and `version` in `retrodesktop.nimble`, the
+   same.
+8. Never commit build output (`build/`, `bin/`, `.deb`).

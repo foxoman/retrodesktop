@@ -1,0 +1,36 @@
+# Retro Desktop
+
+> A Windows 3.1 style desktop and window manager for Linux and for Termux on
+> Android (Termux:X11), written in Nim with Retro Nim UI, by Sultan Al
+> Isaiee (@foxoman).
+
+One program, `retro-desktop`: with no argument the desktop (the window
+manager, the desktop's background, minimized windows as icons, its menu);
+with an argument one of its programs: `progman` (Program Manager),
+`control` (Control Panel), `tasklist` (Task List), `clock`, `calc`,
+`calendar`, `cardfile`.
+
+- Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
+  then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
+- Build: `nimble build -d:release` (needs retroui >= 0.20.6); the Termux
+  package: `sh tools/build-deb.sh`.
+- The window manager runs on the desktop's own X connection (retroui's
+  `x11EventHook`); frames are X windows with title bars drawn by retroui's
+  canvas.
+- Other programs get the look through XSETTINGS, X resources, fontconfig and
+  a generated "Retro31" GTK 3 theme.
+- Settings: retroui's `loadSettings("retrodesktop")` (scheme, desktopColor,
+  pattern, wallpaper, wallpaperMode, font, textScale, size, touch,
+  maximizeNew, linuxLook, wakeLock, startProgman); Program Manager's
+  items and windows in "retrodesktop-progman".
+- Programs talk to the desktop with ClientMessages on the root window:
+  `_RETRO_DESKTOP` (1 cascade, 2 tile, 3 arrange icons, 4 the look changed,
+  5 exit, 6 ask to exit) and EWMH's `_NET_ACTIVE_WINDOW`,
+  `_NET_CLOSE_WINDOW`; they follow the look through the root's
+  `_RETRO_DESKTOP_LOOK` property.
+
+## Docs
+
+- README.md: what it is, installing in Termux, Android settings, keys, building
+- CHANGELOG.md: what changed in each version
+- AGENTS.md: rules for changing the code
