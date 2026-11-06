@@ -8,7 +8,7 @@
 
 import std/[os, strutils]
 import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal,
-                     browser, setup, boxes, games, write, clipboard, opener, saver]
+                     browser, setup, boxes, games, write, clipboard, opener, saver, sounds, help]
 
 proc usage() =
   echo DesktopName, " ", DesktopVersion, " -- a Windows 3.1 style desktop"
@@ -67,6 +67,16 @@ when isMainModule:
     var args: seq[string]
     for k in 2 .. paramCount(): args.add paramStr(k)
     runSaver(args)
+  of "storage": runStorage()
+  of "notify":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runNotify(args)
+  of "sound":
+    # (retro-desktop sound beep: an event's sound, from a script)
+    if paramCount() >= 2: playSound(paramStr(2))
+  of "help": runHelp(if paramCount() >= 2: paramStr(2) else: "contents")
+  of "tour": runTour()
   of "run": runRunBox()
   of "about": runAboutBox()
   of "exit": runExitBox()

@@ -11,7 +11,8 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[math, tables, algorithm, strutils]
+import std/[math, tables, algorithm, strutils, os]
+from std/posix import kill, Pid, SIGSTOP, SIGCONT
 from std/times import epochTime
 import retroui
 import retroui/canvas2d
@@ -63,6 +64,8 @@ var
   command*: proc (n, arg: int) {.nimcall.}
     ## a _RETRO_DESKTOP message the desktop answers (3 arrange icons,
     ## 4 the settings changed, 5 exit)
+  sound*: proc (event: string) {.nimcall.}
+    ## a window opened, closed, was minimized, maximized, restored: its sound
   bigFrames*: bool               ## title bars and borders for fingers
   maximizeNew*: bool             ## new windows open maximized (a phone)
   drag: tuple[kind: DragKind; c: Client; part: Part; rx, ry: int; x, y, w, h: int]
@@ -75,6 +78,7 @@ var
   menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int;
               fromX, fromY: int; armed: bool]
   switchWin: Window              # Alt+Tab's box (None: not shown)
+  backKey = 0                    # Android's Back (XF86Back), 0 when the keyboard has none
   switchTo: Client
   pending*: seq[tuple[class, title: string; x, y, w, h: int; maximized, iconic: bool; until: float]]
     ## where the programs the desktop opened again had their windows (by
@@ -476,9 +480,77 @@ proc focusTop() =
 
 # ---- what can be done to a window -------------------------------------------------------------------
 
+# ---- programs paused while minimized ----------------------------------------------------------------
+
+var
+  pauseIconic*: bool
+    ## a program whose windows are all minimized is stopped (SIGSTOP) until
+    ## one comes back: no CPU, no battery
+  paused: seq[int]               ## the processes stopped
+  pausedFile*: string
+    ## where they are written down: a desktop that ends without letting them
+    ## go on, the next one does
+
+proc familyOf(pid: int): seq[int] =
+  ## `pid` and its children, theirs, and so on (Firefox's content processes).
+  result = @[pid]
+  var kids: Table[int, seq[int]]
+  for kind, path in walkDir("/proc"):
+    let p = try: parseInt(path.extractFilename) except ValueError: -1
+    if p <= 0: continue
+    try:
+      let st = readFile(path / "stat")
+      let f = st[st.rfind(')') + 2 .. ^1].splitWhitespace
+      kids.mgetOrPut(parseInt(f[1]), @[]).add p
+    except CatchableError: discard
+  var i = 0
+  while i < result.len:
+    for k in kids.getOrDefault(result[i], @[]):
+      if k notin result: result.add k
+    inc i
+
+proc writePaused() =
+  if pausedFile.len == 0: return
+  try: writeFile(pausedFile, paused.join("\n"))
+  except CatchableError: discard
+
+proc pause(c: Client) =
+  if not pauseIconic or c.class == "Retro-desktop": return
+  if c.pid <= 0:
+    # (a program may say its process only after its window was shown)
+    let p = propLongs(dpy, c.win, XInternAtom(dpy, "_NET_WM_PID", 0), XA_CARDINAL)
+    if p.len > 0: c.pid = int(p[0])
+  if c.pid <= 0: return
+  let me = getCurrentProcessId()
+  if c.pid == me: return
+  for o in clients:
+    if o.pid == c.pid and not o.iconic: return     # (a window of it still shown)
+  for p in familyOf(c.pid):
+    if p != me and p notin paused and kill(Pid(p), SIGSTOP) == 0: paused.add p
+  writePaused()
+
+proc resume(c: Client) =
+  if c == nil or c.pid <= 0 or paused.len == 0: return
+  let fam = familyOf(c.pid)
+  var rest: seq[int]
+  for p in paused:
+    if p in fam: discard kill(Pid(p), SIGCONT) else: rest.add p
+  paused = rest
+  writePaused()
+
+proc resumeAll*() =
+  ## Every program paused goes on (the desktop ends, the setting is off).
+  for p in paused: discard kill(Pid(p), SIGCONT)
+  paused = @[]
+  writePaused()
+
+proc playSound(event: string) =
+  if sound != nil: sound(event)
+
 proc close*(c: Client) =
   ## Asks the program to close the window (WM_DELETE_WINDOW), else ends it.
   if c == nil: return
+  resume(c)                              # (a paused program cannot answer)
   if c.canDelete: sendMessage(c.win, aWmProtocols, clong(aWmDelete))
   else: discard XKillClient(dpy, culong(c.win))
 
@@ -491,11 +563,15 @@ proc minimize*(c: Client) =
   setNetState(c)
   if active == c: focusTop()
   changedNow()
+  playSound("minimize")
+  pause(c)
 
 proc restore*(c: Client) =
   ## An icon back to its window (or a maximized window to its size before).
   if c == nil: return
+  if c.iconic or c.maximized: playSound("restore")
   if c.iconic:
+    resume(c)
     c.iconic = false
     discard XMapWindow(dpy, c.frame)
     setWmState(c, 1)
@@ -517,6 +593,7 @@ proc maximize*(c: Client) =
   if c.iconic: restore(c)
   c.saved = (c.x, c.y, c.w, c.h)
   c.maximized = true
+  playSound("maximize")
   maximizeGeometry(c)
   applyGeometry(c)
   setNetState(c)
@@ -1008,10 +1085,13 @@ proc manage(w: Window; adopt: bool) =
     maximize(c)
   focus(c)
   if wasIcon and c.hasButtons: minimize(c)
+  if not adopt and c.transient == None and not c.dialog and not c.fixed: playSound("open")
   updateClientList()
   changedNow()
 
 proc unmanage(c: Client; destroyed: bool) =
+  resume(c)
+  if c.transient == None and not c.dialog: playSound("close")
   if not destroyed:
     let (x, y) = (c.x + bw(), c.y + topOf())
     discard XUngrabButton(dpy, AnyButton, AnyModifier, c.win)
@@ -1200,6 +1280,11 @@ proc onKey(e: XKeyEvent) =
     if taskList != nil: taskList()
   elif e.keycode == esc and mods == Mod1Mask:
     if active != nil: minimize(active)
+  elif backKey != 0 and e.keycode == cuint(backKey):
+    # (Android's Back, when Termux:X11 gives it as XF86Back: the window in front closes)
+    if menuWin != None: closeMenu()
+    elif switchWin != None: closeSwitch()
+    elif active != nil: close(active)
 
 proc onClientMessage(e: XClientMessageEvent) =
   let c = findClient(e.window)
@@ -1461,6 +1546,11 @@ proc grabKeys() =
     if code == 0: continue
     for extra in [0.cuint, LockMask, Mod2Mask, LockMask or Mod2Mask]:
       discard XGrabKey(dpy, code, mods or extra, root, 1, GrabModeAsync, GrabModeAsync)
+  # (Android's Back key: XF86Back)
+  backKey = int(XKeysymToKeycode(dpy, 0x1008FF26.culong))
+  if backKey != 0:
+    for extra in [0.cuint, LockMask, Mod2Mask, LockMask or Mod2Mask]:
+      discard XGrabKey(dpy, cint(backKey), extra, root, 1, GrabModeAsync, GrabModeAsync)
 
 proc start*(): bool =
   ## Becomes the screen's window manager, on the connection of the desktop's
@@ -1540,6 +1630,7 @@ proc stop*() =
   ## Gives every window back to the screen, as it was, and stops managing.
   if not running: return
   closeMenu()
+  resumeAll()
   for c in clients.reversed:
     let x = c.x + bw()
     let y = c.y + topOf()
@@ -1565,6 +1656,7 @@ proc savedGeometry*(c: Client): tuple[x, y, w, h: int] =
 
 proc closeAll*() =
   ## Asks every program to close its windows (Exit Retro Desktop).
+  resumeAll()
   for c in snapshot(): close(c)
 
 proc relook*() =

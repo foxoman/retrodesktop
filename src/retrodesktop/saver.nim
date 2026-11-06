@@ -7,7 +7,7 @@
 
 import std/[random, math, dynlib]
 import retroui
-import retroui/uirelays/drivers/x11_driver
+
 import xlib, common, link
 
 # ---- how long the screen has been idle ---------------------------------------------------------------

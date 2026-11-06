@@ -87,8 +87,9 @@ Description: A Windows 3.1 style desktop for Termux:X11
  for Termux on Android (Termux:X11): every X11 program in a 3.1 frame,
  Program Manager with the programs you install, Setup to install more
  (pkg underneath), Terminal, Write, Clock, Calculator, Calendar, Cardfile,
- Clipboard Viewer, Minesweeper, Solitaire, Reversi, Control Panel, Task
- List, File Manager, Paintbrush, Board and Notepad. Start it with:
+ Clipboard Viewer, Minesweeper, Solitaire, Reversi, a DOS group for
+ DOSBox-X, Help on F1, sounds and wallpapers of its own, Control Panel,
+ Task List, File Manager, Paintbrush, Board and Notepad. Start it with:
  retro-desktop
 CTL
 mkdir -p build

@@ -134,9 +134,11 @@ proc fullscreenSelf*() =
   sendToRoot(atom(d, "_NET_WM_STATE"), Window(x11Window()), 1,
              clong(atom(d, "_NET_WM_STATE_FULLSCREEN")), 0)
 
-proc asDialog*() =
+proc asDialog*(atX = -1; atY = -1) =
   ## This program's window is a dialog: no sizing, no minimize or maximize
-  ## button, in the middle of the screen (the desktop's Run, About, Exit).
+  ## button, in the middle of the screen (the desktop's Run, About, Exit) --
+  ## or at `atX`, `atY` (the screen's pixels; negative: from its right or
+  ## bottom edge).
   let d = display()
   if d == nil: return
   let w = Window(x11Window())
@@ -153,8 +155,13 @@ proc asDialog*() =
            [clong(atom(d, "_NET_WM_WINDOW_TYPE_DIALOG"))])
   # (in the middle: the window manager may have placed it before it knew)
   let s = XDefaultScreen(d)
-  discard XMoveWindow(d, w, max(0, (XDisplayWidth(d, s) - a.width) div 2),
-                      max(0, (XDisplayHeight(d, s) - a.height) div 3))
+  let sw = int(XDisplayWidth(d, s))
+  let sh = int(XDisplayHeight(d, s))
+  let aw = int(a.width)
+  let ah = int(a.height)
+  let x = if atX == -1: (sw - aw) div 2 elif atX < 0: sw - aw + atX else: atX
+  let y = if atY == -1: (sh - ah) div 3 elif atY < 0: sh - ah + atY else: atY
+  discard XMoveWindow(d, w, cint(max(0, x)), cint(max(0, y)))
   discard XFlush(d)
 
 proc showArt*(kind: string) =

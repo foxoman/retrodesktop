@@ -7,7 +7,7 @@
 
 import std/[posix, strutils]
 import retroui
-import common, link
+import common, link, help
 
 var
   list: seq[WinInfo]
@@ -40,6 +40,7 @@ proc runTaskList*() =
   var cols = @[column("Program", 260), column("Memory", 90, alRight)]
   var lastRefresh = -10_000
   while beginFrame():
+    helpKeys("tasklist")
     if ui.now - lastRefresh > 2000:
       refresh()
       lastRefresh = ui.now

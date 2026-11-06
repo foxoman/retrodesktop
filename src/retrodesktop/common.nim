@@ -10,7 +10,7 @@ import retroui/[svgimport, imaging]
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.5"
+  DesktopVersion* = "0.1.6"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -47,9 +47,57 @@ proc hexColor*(s: string; default: Color): Color =
     color(uint8((v shr 16) and 255), uint8((v shr 8) and 255), uint8(v and 255))
   except ValueError: default
 
+proc scheme(window, text, face, light, shadow, select, selectText, gray, field, fieldText,
+            scroll, tip, link: Color; frame = color(0, 0, 0); line = Color(); edge = color(0, 0, 0)): Theme =
+  Theme(window: window, text: text, face: face, light: light, shadow: shadow, frame: frame,
+        select: select, selectText: selectText, gray: gray, field: field, fieldText: fieldText,
+        scroll: scroll, tip: tip, tipText: text, line: (if line.a == 0: shadow else: line),
+        edge: edge, link: link)
+
+let desktopThemes* = [
+  ## The desktop's own color schemes, beside Retro Nim UI's.
+  (name: "Emerald City", theme: scheme(color(255, 255, 255), color(0, 0, 0), color(192, 220, 192),
+    color(240, 255, 240), color(96, 128, 96), color(0, 112, 0), color(255, 255, 255), color(96, 128, 96),
+    color(255, 255, 255), color(0, 0, 0), color(160, 200, 160), color(255, 255, 225), color(0, 96, 0))),
+  (name: "Rose", theme: scheme(color(255, 248, 250), color(0, 0, 0), color(232, 200, 208),
+    color(255, 240, 244), color(160, 112, 128), color(160, 0, 64), color(255, 255, 255), color(144, 96, 112),
+    color(255, 255, 255), color(0, 0, 0), color(216, 168, 184), color(255, 255, 225), color(160, 0, 64))),
+  (name: "Slate", theme: scheme(color(248, 248, 252), color(0, 0, 0), color(176, 184, 200),
+    color(232, 236, 244), color(112, 120, 144), color(64, 80, 112), color(255, 255, 255), color(100, 108, 128),
+    color(255, 255, 255), color(0, 0, 0), color(152, 160, 180), color(255, 255, 225), color(48, 64, 128))),
+  (name: "Bordeaux", theme: scheme(color(255, 255, 240), color(0, 0, 0), color(192, 192, 192),
+    color(255, 255, 255), color(128, 128, 128), color(128, 0, 64), color(255, 255, 255), color(128, 128, 128),
+    color(255, 255, 255), color(0, 0, 0), color(192, 192, 192), color(255, 255, 225), color(128, 0, 64))),
+  (name: "Canyon", theme: scheme(color(255, 248, 232), color(0, 0, 0), color(216, 184, 152),
+    color(248, 228, 208), color(152, 112, 80), color(160, 64, 32), color(255, 255, 255), color(128, 96, 64),
+    color(255, 255, 255), color(0, 0, 0), color(200, 160, 128), color(255, 248, 220), color(160, 64, 32))),
+  (name: "Tweed", theme: scheme(color(248, 240, 224), color(0, 0, 0), color(200, 184, 152),
+    color(236, 224, 200), color(136, 112, 80), color(96, 64, 32), color(255, 255, 255), color(120, 100, 72),
+    color(255, 255, 255), color(0, 0, 0), color(184, 164, 128), color(255, 255, 225), color(96, 64, 32))),
+  (name: "Leather", theme: scheme(color(32, 32, 32), color(232, 232, 232), color(64, 64, 64),
+    color(128, 128, 128), color(24, 24, 24), color(192, 192, 192), color(0, 0, 0), color(140, 140, 140),
+    color(48, 48, 48), color(240, 240, 240), color(80, 80, 80), color(64, 64, 64), color(160, 200, 255),
+    line = color(100, 100, 100))),
+  (name: "Neon", theme: scheme(color(0, 0, 0), color(0, 255, 0), color(32, 0, 48),
+    color(128, 0, 160), color(0, 0, 0), color(255, 0, 255), color(0, 0, 0), color(0, 128, 0),
+    color(0, 0, 0), color(0, 255, 0), color(64, 0, 96), color(0, 0, 0), color(0, 255, 255),
+    frame = color(255, 0, 255), line = color(128, 0, 160), edge = color(255, 0, 255))),
+  (name: "Sunlight", theme: scheme(color(255, 255, 255), color(0, 0, 0), color(255, 255, 255),
+    color(255, 255, 255), color(0, 0, 0), color(0, 0, 0), color(255, 255, 0), color(64, 64, 64),
+    color(255, 255, 255), color(0, 0, 0), color(224, 224, 224), color(255, 255, 0), color(0, 0, 192),
+    line = color(0, 0, 0)))]
+  ## (Sunlight: black on white, for a phone outdoors)
+
+proc schemeNames*(): seq[string] =
+  ## Every color scheme: Retro Nim UI's, then the desktop's own.
+  for t in builtinThemes: result.add t.name
+  for t in desktopThemes: result.add t.name
+
 proc schemeTheme*(name: string): Theme =
   ## The color scheme called `name` (Classic when there is none).
   for t in builtinThemes:
+    if cmpIgnoreCase(t.name, name) == 0: return t.theme
+  for t in desktopThemes:
     if cmpIgnoreCase(t.name, name) == 0: return t.theme
   Classic
 
@@ -114,6 +162,14 @@ proc companion*(name: string): string =
   let beside = getAppDir() / name
   if fileExists(beside): return beside
   findExe(name)
+
+proc gameDataDir*(name: string): string =
+  ## Where the free game data Setup downloads goes (Freedoom's: "freedoom").
+  dataDir(SettingsName) / name
+
+proc dosDir*(): string =
+  ## The DOS games and programs: DOSBox-X's drive C:.
+  getHomeDir() / "DOS"
 
 proc terminalCommand*(): string =
   ## The desktop's Terminal, as a command line that runs what follows its
@@ -331,6 +387,11 @@ proc appsStamp*(): string =
   ## folders of desktop entries changed, and Program Manager's own items.
   for d in dataDirs():
     let dir = d / "applications"
+    try:
+      if dirExists(dir): result.add $getLastModificationTime(dir).toUnix & ";"
+    except CatchableError: discard
+  # (games put in ~/DOS, Freedoom's levels downloaded)
+  for dir in [dosDir(), gameDataDir("freedoom")]:
     try:
       if dirExists(dir): result.add $getLastModificationTime(dir).toUnix & ";"
     except CatchableError: discard

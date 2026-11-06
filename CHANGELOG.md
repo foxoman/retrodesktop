@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.1.6
+
+- **Sounds**: chimes of the desktop's own (made from sine waves the first
+  time, no recordings) for its start and exit, programs opening and closing,
+  minimize, maximize, restore, notifications; Control Panel > Sound chooses
+  them (or a file of yours). Played through PulseAudio, else Termux:API.
+- **Wallpapers and colors**: nine pixel-art wallpapers drawn by the desktop
+  (Control Panel > Desktop > Wallpaper), and nine more color schemes,
+  Sunlight among them for a phone outdoors.
+- **DOS games**: with DOSBox-X installed, Program Manager's DOS group shows
+  what is in ~/DOS (a game a folder), started in DOSBox-X with ~/DOS as C:.
+- **Freedoom** in Setup: Chocolate Doom and Freedoom's two games, their
+  levels downloaded from Freedoom's GitHub releases; in the Games group.
+- **Android's Back** (XF86Back) closes the window in front.
+- **Android Files** in Main: the phone's shared storage in File Manager;
+  the first time, termux-setup-storage asks Android.
+- **Notifications**: the desktop's own `notify-send` (first on its programs'
+  PATH) gives Android notifications with Termux:API, else a box at the
+  bottom right of the screen.
+- **Help**: F1 and Help > Help Topics in every program open its page (Help,
+  with links between pages, Contents and Back); the Welcome offers a tour
+  of six pages with pictures.
+- **Programs paused while minimized** (Control Panel > Windows, off at
+  first): SIGSTOP for the program and its children when all its windows are
+  icons, SIGCONT when one comes back, when it is closed, when the desktop
+  ends; a desktop that crashed leaves them written down and the next start
+  lets them go on.
+- **3D through Android's GPU**: Setup > System > 3D graphics installs
+  VirGL; the desktop starts its server and tells programs to use it
+  (Control Panel > Linux Programs to turn it off).
+- **A quicker start**: Program Manager first, StartUp and the programs to
+  reopen once it is there.
+- Control Panel opens larger; Setup's list knows Freedoom and 3D graphics.
+- Needs Retro Nim UI 0.20.8 (Retro Files opens the folder it is given).
 ## 0.1.5
 
 - **Setup**, as Windows 3.1's: the blue screen, the programs to choose in

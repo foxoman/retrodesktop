@@ -6,7 +6,7 @@
 
 import std/[os, strutils, times, math, algorithm]
 import retroui
-import common, link
+import common, link, help
 
 proc keep(name, key, value: string) =
   var s = loadSettings(name)
@@ -69,6 +69,7 @@ proc runClock*() =
   h24 = desktopSettings().setting("clock24", "on") != "off"
   followLook(proc () = h24 = desktopSettings().setting("clock24", "on") != "off")
   while beginFrame():
+    helpKeys("clock")
     let t = now()
     menubar:
       menu "&Settings":
@@ -85,6 +86,8 @@ proc runClock*() =
         if menuItem("Da&te", checked = showDate):
           showDate = not showDate
           keep("retrodesktop-clock", "date", if showDate: "1" else: "0")
+      menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("clock")
     let r = canvas(-1, remainingH())
     fill(r, ui.theme.face)
     var face = r
@@ -238,12 +241,15 @@ proc runCalc*() =
   followLook()
   var showAbout = false
   while beginFrame():
+    helpKeys("calc")
     menubar:
       menu "&Edit":
         if menuItem("&Copy", "Ctrl+C"): putClipboardText(calc.display)
         if menuItem("&Paste", "Ctrl+V"):
           try: setValue(parseFloat(getClipboardText().strip)) except ValueError: discard
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("calc")
+        menuSeparator()
         if menuItem("&About Calculator..."): showAbout = true
     calcKeys()
     let r = canvas(-1, remainingH())
@@ -344,11 +350,14 @@ proc runCalendar*() =
   showArt("calendar")
   followLook()
   while beginFrame():
+    helpKeys("calendar")
     menubar:
       menu "&Show":
         if menuItem("&Today", "Ctrl+T"): calDay = today()
         if menuItem("&Previous Day", "Ctrl+PgUp"): calDay = calDay.addDays(-1)
         if menuItem("&Next Day", "Ctrl+PgDn"): calDay = calDay.addDays(1)
+      menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("calendar")
     if hotkeyPressed("Ctrl+T"): calDay = today()
     if hotkeyPressed("Ctrl+PgUp"): calDay = calDay.addDays(-1)
     if hotkeyPressed("Ctrl+PgDn"): calDay = calDay.addDays(1)
@@ -430,6 +439,7 @@ proc runCardfile*() =
   followLook()
   var titles: seq[string]
   while beginFrame():
+    helpKeys("cardfile")
     menubar:
       menu "&Card":
         if menuItem("&Add...", "F7"):
@@ -446,6 +456,8 @@ proc runCardfile*() =
         if menuItem("&Go To...", "F4"):
           showCardFind = true
           focusFirstText(inDialog = true)
+      menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("cardfile")
     if hotkeyPressed("F7"):
       cards.add Card(title: "New card")
       cardSel = cards.high

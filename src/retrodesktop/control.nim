@@ -6,13 +6,13 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[strutils, math, times]
+import std/[os, strutils, math, times]
 import retroui
-import common, link, art
+import common, link, art, sounds, help
 
 type Applet = enum
   apColor = "Color", apDesktop = "Desktop", apFonts = "Fonts", apWindows = "Windows",
-  apDateTime = "Date/Time", apSaver = "Screen Saver", apPrograms = "Linux Programs",
+  apDateTime = "Date/Time", apSound = "Sound", apSaver = "Screen Saver", apPrograms = "Linux Programs",
   apAndroid = "Android", apAbout = "About"
 
 var
@@ -43,6 +43,13 @@ var
   saver = 0
   saverDelay = 5
   saverText = ""
+  pauseIconic = false
+  gpu = true
+  soundsOn = true
+  soundMap: seq[string]
+  evSel = 0
+  pickSound = false
+  pickedSound = ""
 
 const
   Savers* = ["(None)", "Blank Screen", "Starfield", "Mystify", "Marquee"]
@@ -52,9 +59,6 @@ const
            "America/Sao_Paulo", "Australia/Sydney"]
   WallModes = ["fill", "center", "tile", "stretch"]
   AutoOnOff = ["auto", "on", "off"]
-
-proc schemeNames(): seq[string] =
-  for t in builtinThemes: result.add t.name
 
 proc patternNames(): seq[string] =
   for (n, _) in Patterns: result.add n
@@ -80,11 +84,16 @@ proc readAll() =
   saver = max(0, Savers.find(conf.setting("saver", "(None)")))
   try: saverDelay = clamp(parseInt(conf.setting("saverDelay", "5")), 1, 120) except ValueError: saverDelay = 5
   saverText = conf.setting("saverText", DesktopName)
+  pauseIconic = conf.setting("pauseIconic", "off") == "on"
+  gpu = conf.setting("gpu", "auto") != "off"
+  soundsOn = conf.setting("sounds", "on") != "off"
+  soundMap = @[]
+  for (key, _, _) in SoundEvents: soundMap.add soundFor(conf, key)
 
 proc saveAll() =
   ## Keeps what the dialogs set; the desktop and its programs take it now.
   conf = desktopSettings()
-  conf["scheme"] = schemeNames()[clamp(scheme, 0, builtinThemes.high)]
+  conf["scheme"] = schemeNames()[clamp(scheme, 0, schemeNames().high)]
   conf["desktopColor"] = hexOf(deskColor)
   conf["pattern"] = patternNames()[clamp(pattern, 0, Patterns.high)]
   conf["wallpaper"] = wallpaper
@@ -103,6 +112,11 @@ proc saveAll() =
   conf["saver"] = Savers[clamp(saver, 0, Savers.high)]
   conf["saverDelay"] = $saverDelay
   conf["saverText"] = saverText
+  conf["pauseIconic"] = (if pauseIconic: "on" else: "off")
+  conf["gpu"] = (if gpu: "auto" else: "off")
+  conf["sounds"] = (if soundsOn: "on" else: "off")
+  for i, (key, _, _) in SoundEvents:
+    if i < soundMap.len: conf["sound." & key] = soundMap[i]
   saveDesktopSettings(conf)
   applyDesktopLook()
   retroCommand(RetroLookChanged)
@@ -114,6 +128,7 @@ proc artOf(a: Applet): string =
   of apFonts: "readme"
   of apWindows: "window"
   of apDateTime: "datetime"
+  of apSound: "sound"
   of apSaver: "saver"
   of apPrograms: "app"
   of apAndroid: "terminal"
@@ -152,7 +167,7 @@ proc colorDialog() =
   dialog(showDialog, "Color", 420):
     form 0:
       field "Color &Schemes:": combo(schemeNames(), scheme)
-    schemePreview(builtinThemes[clamp(scheme, 0, builtinThemes.high)].theme)
+    schemePreview(schemeTheme(schemeNames()[clamp(scheme, 0, schemeNames().high)]))
     if okCancel(): saveAll()
 
 proc desktopDialog() =
@@ -163,11 +178,17 @@ proc desktopDialog() =
         field "&Name:": combo(patternNames(), pattern)
     group "Wallpaper":
       form 0:
-        field "&File:":
-          row([-1, 0, 0]):
-            edit wallpaper
-            if button("&Browse..."): pickWall = true
-            if button("&None"): wallpaper = ""
+        var wallIdx = if wallpaper.startsWith("@"): 1 + max(0, BuiltinWallpapers.find(wallpaper[1 .. ^1])) else: 0
+        let choices = @["(a picture of yours)"] & @BuiltinWallpapers
+        field "&Wallpaper:":
+          if combo(choices, wallIdx):
+            wallpaper = if wallIdx > 0: "@" & BuiltinWallpapers[wallIdx - 1] else: ""
+        if not wallpaper.startsWith("@"):
+          field "&File:":
+            row([-1, 0, 0]):
+              edit wallpaper
+              if button("&Browse..."): pickWall = true
+              if button("&None"): wallpaper = ""
         field "":
           row:
             for i, m in ["&Fill", "&Center", "&Tile", "&Stretch"]:
@@ -209,9 +230,11 @@ proc windowsDialog() =
     form 0:
       field "&Frames for fingers:": segmented(["Automatic", "On", "Off"], touch)
       field "Open &maximized:": segmented(["Automatic", "On", "Off"], maxNew)
+    checkbox("&Pause programs while they are minimized", pauseIconic)
     paragraph "Frames for fingers: taller title bars and wider borders; an icon opens with one " &
       "tap. Automatic: on in Termux. Open maximized: new windows fill the screen. " &
-      "Automatic: on a phone's screen in Termux."
+      "Automatic: on a phone's screen in Termux. A paused program takes no CPU and no " &
+      "battery until you bring it back -- music and downloads in it stop too."
     if okCancel(): saveAll()
 
 proc dateTimeDialog() =
@@ -232,6 +255,38 @@ proc dateTimeDialog() =
       "(TZ); empty: the system's own."
     wakeIn(1000)
     if okCancel(): saveAll()
+
+proc soundDialog() =
+  dialog(showDialog, "Sound", 540):
+    row:
+      col(240):
+        label "&Events:"
+        var names: seq[string]
+        for e in SoundEvents: names.add e[1]
+        listbox(names, evSel, rows = 9)
+      col:
+        label "&Files:"
+        evSel = clamp(evSel, 0, soundMap.high)
+        let cur = soundMap[evSel]
+        var shown = @Chimes
+        var fsel = Chimes.find(cur)
+        if fsel < 0:
+          shown.add cur.extractFilename
+          fsel = shown.high
+        if listbox(shown, fsel, rows = 9) and fsel < Chimes.len: soundMap[evSel] = Chimes[fsel]
+    row:
+      if button("&Test"):
+        let what = soundMap[evSel]
+        playFile(if what in Chimes: chimeFile(what) else: what)
+      if button("&Browse..."): pickSound = true
+      spring()
+      checkbox("&Enable system sounds", soundsOn)
+    paragraph "The chimes are the desktop's own. Sound needs PulseAudio (Setup > " &
+      "Multimedia > Sound: the desktop starts it) or Termux:API."
+    if okCancel(): saveAll()
+  if pickSound:
+    if filePicker(pickSound, pickedSound, fmOpen, ["*.wav", "*.ogg", "*.mp3", "*.flac"], "Sound"):
+      soundMap[evSel] = pickedSound
 
 proc saverDialog() =
   dialog(showDialog, "Screen Saver", 440):
@@ -256,6 +311,7 @@ proc saverDialog() =
 proc programsDialog() =
   dialog(showDialog, "Linux Programs", 480):
     checkbox("&Give other programs the desktop's look", linuxLook)
+    checkbox("Use Android's &GPU for 3D (VirGL, once Setup > System > 3D graphics is installed)", gpu)
     paragraph "GTK programs (and Chromium, Electron, Firefox) take the color scheme as the " &
       "\"Retro31\" theme, the desktop's fonts (FreeSans, FreeSerif, FreeMono) and its size; " &
       "Qt and older X programs take the size and the fonts. It is done through XSETTINGS, " &
@@ -296,15 +352,16 @@ proc aboutDialog() =
 proc runControl*() =
   readAll()
   applyDesktopLook()
-  openApp("Control Panel", scaled(460), scaled(300), frame = wfSystem, userFrame = false, id = "control")
+  openApp("Control Panel", scaled(520), scaled(400), frame = wfSystem, userFrame = false, id = "control")
   showArt("control")
   followLook()
-  applets = @[apColor, apDesktop, apFonts, apWindows, apDateTime, apSaver, apPrograms]
+  applets = @[apColor, apDesktop, apFonts, apWindows, apDateTime, apSound, apSaver, apPrograms]
   if inTermux(): applets.add apAndroid
   applets.add apAbout
   marked = newSeq[bool](applets.len)
   var showAboutCp = false
   while beginFrame():
+    helpKeys("control")
     menubar:
       menu "&Settings":
         for i, a in applets:
@@ -316,6 +373,8 @@ proc runControl*() =
         menuSeparator()
         if menuItem("E&xit"): quitApp()
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("control")
+        menuSeparator()
         if menuItem("&About Control Panel..."): showAboutCp = true
     let px = devPx(32.0)
     let ev = iconView(applets.len,
@@ -336,6 +395,7 @@ proc runControl*() =
                  of apFonts: "The font, the text size, the size of everything"
                  of apWindows: "Frames for fingers; windows that open maximized"
                  of apDateTime: "The clock's hours and the time zone"
+                 of apSound: "The sounds of the desktop's events"
                  of apSaver: "A screen saver, after a while with nothing done"
                  of apPrograms: "The look GTK, Qt and other programs are given"
                  of apAndroid: "Keeping the desktop running on Android"
@@ -348,6 +408,7 @@ proc runControl*() =
       of apFonts: fontsDialog()
       of apWindows: windowsDialog()
       of apDateTime: dateTimeDialog()
+      of apSound: soundDialog()
       of apSaver: saverDialog()
       of apPrograms: programsDialog()
       of apAndroid: androidDialog()

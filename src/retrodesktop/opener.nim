@@ -205,6 +205,14 @@ proc installOpener*() =
       writeFile(f, body)
       setFilePermissions(f, {fpUserRead, fpUserWrite, fpUserExec, fpGroupRead, fpGroupExec,
                              fpOthersRead, fpOthersExec})
+    # (notify-send: the programs' notifications to Android's, or to a box)
+    let n = dir / "notify-send"
+    let nbody = "#!" & sh & "\n# Retro Desktop's: notifications to Android (Termux:API) or the desktop.\n" &
+                "exec " & quoteShell(getAppFilename()) & " notify \"$@\"\n"
+    if not fileExists(n) or readFile(n) != nbody:
+      writeFile(n, nbody)
+      setFilePermissions(n, {fpUserRead, fpUserWrite, fpUserExec, fpGroupRead, fpGroupExec,
+                             fpOthersRead, fpOthersExec})
     let path = getEnv("PATH")
     if not path.startsWith(dir & ":"): putEnv("PATH", dir & ":" & path)
   except CatchableError: discard

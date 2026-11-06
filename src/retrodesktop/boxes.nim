@@ -7,9 +7,9 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/strutils
+import std/[os, strutils]
 import retroui
-import common, link, art
+import common, link, art, sounds
 
 const
   RetroWelcomed* = 8
@@ -155,6 +155,9 @@ proc runWelcomeBox*() =
         checkbox("&Keep Termux awake while the desktop runs (termux-wake-lock)", awake)
     endScroll()
     row:
+      if button("Take the &Tour"):
+        launch(selfCommand("tour"))
+        quitApp()
       spring()
       if button("OK", isDefault = true): quitApp()
     endFrame()
@@ -164,4 +167,103 @@ proc runWelcomeBox*() =
   if inTermux(): s["wakeLock"] = (if awake: "on" else: "off")
   saveDesktopSettings(s)
   retroCommand(RetroWelcomed)
+  closeApp()
+
+# ---- Android Files ----------------------------------------------------------------------------------
+
+proc runStorage*() =
+  ## The phone's shared storage (photos, downloads, documents) in File
+  ## Manager; the first time, Termux asks Android to let it see them.
+  let shared = getHomeDir() / "storage" / "shared"
+  proc show() =
+    let files = companion("retro-files")
+    if files.len > 0: launch(quoteShell(files) & " " & quoteShell(shared))
+    else: launch(terminalCommand() & " -e sh -c " & quoteShell("cd " & quoteShell(shared) & "; exec sh"))
+  if dirExists(shared):
+    show()
+    return
+  if bringBack("Android Files"): return
+  openBox("Android Files", 460, 170, "storage")
+  var asked = false
+  var until = 0
+  while beginFrame():
+    row:
+      msgIcon(miQuestion)
+      col:
+        if not asked:
+          label("Android keeps your photos, downloads and documents apart from Termux.")
+          label("Let Termux see them? Android asks you (termux-setup-storage).")
+        elif ui.now < until:
+          label("Waiting for Android: answer its question (Allow) and come back.")
+          label("(It may ask in the Terminal first: answer y.)")
+        else:
+          label("Termux cannot see the phone's files yet.")
+          label("Android > Settings > Apps > Termux > Permissions > Files allows it.")
+    row:
+      spring()
+      if not asked:
+        if button("&Allow...", isDefault = true):
+          asked = true
+          until = ui.now + 120_000
+          launch(terminalCommand() & " -e termux-setup-storage")
+        if button("Cancel") or ui.key == KeyEsc: quitApp()
+      elif button(if ui.now < until: "Cancel" else: "OK", isDefault = ui.now >= until):
+        quitApp()
+    if asked:
+      if dirExists(shared):
+        show()
+        quitApp()
+      wakeIn(500)
+    endFrame()
+    appFrameDone()
+  closeApp()
+
+# ---- notifications ----------------------------------------------------------------------------------
+
+proc runNotify*(args: seq[string]) =
+  ## `notify-send`'s words: SUMMARY [BODY], with its options (-u critical,
+  ## -t ms, -i, -a...). In Termux with Termux:API an Android notification;
+  ## else a box at the bottom right of the screen for a few seconds.
+  var words: seq[string]
+  var ms = 6000
+  var urgent = false
+  var i = 0
+  while i < args.len:
+    let a = args[i]
+    if a in ["-u", "--urgency", "-t", "--expire-time", "-i", "--icon", "-a", "--app-name",
+             "-c", "--category", "-h", "--hint", "-r", "--replace-id", "-A", "--action"]:
+      if i + 1 < args.len:
+        if a in ["-u", "--urgency"]: urgent = args[i + 1] == "critical"
+        if a in ["-t", "--expire-time"]:
+          try: ms = max(1000, parseInt(args[i + 1])) except ValueError: discard
+      i += 2
+      continue
+    if a.startsWith("--urgency="): urgent = a.endsWith("critical")
+    elif a.startsWith("-"): discard
+    else: words.add a
+    inc i
+  if words.len == 0: return
+  let title = words[0]
+  let body = if words.len > 1: words[1 .. ^1].join(" ") else: ""
+  playSound("notify")
+  if inTermux() and findExe("termux-notification").len > 0:
+    launch("termux-notification --title " & quoteShell(title) & " --content " & quoteShell(body) &
+           (if urgent: " --priority high" else: ""))
+    return
+  applyDesktopLook()
+  openApp(title, scaled(340), scaled(96), frame = wfSystem, userFrame = false, id = "notify")
+  followLook()
+  asDialog(-12, -12)
+  var until = 0
+  while beginFrame():
+    if until == 0: until = ui.now + ms
+    row:
+      msgIcon(if urgent: miWarning else: miInfo)
+      col:
+        label(title, bold = true, literal = true)
+        if body.len > 0: paragraph body
+    if ui.pressed or ui.key == KeyEsc or ui.now >= until: quitApp()
+    wakeIn(max(10, until - ui.now))
+    endFrame()
+    appFrameDone()
   closeApp()

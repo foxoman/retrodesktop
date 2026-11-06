@@ -9,7 +9,7 @@
 
 import std/[os, strutils, tables, math]
 import retroui
-import common, link, art
+import common, link, art, help
 
 type
   Item = object
@@ -28,60 +28,15 @@ type
 
 const
   GroupOrder = ["Main", "Accessories", "Applications", "Internet", "Office", "Development",
-                "Graphics", "Multimedia", "System", "Games", "StartUp"]
-  HelpText = """
-# Retro Desktop
+                "Graphics", "Multimedia", "System", "Games", "DOS", "StartUp"]
 
-Every program opens in its own window on the desktop.
-
-* **Move** a window by its title bar; **size** it by its border or a corner.
-* The **minimize** button (the arrow down) makes it an icon at the bottom of
-  the desktop; double click the icon (tap it on a touch screen) to bring it back.
-* The **maximize** button (the arrow up), or a double click on the title bar,
-  makes it fill the screen.
-* The **control-menu box** (the bar at the left of the title) has Restore,
-  Minimize, Maximize, Close and Switch To. Double click it to close the
-  window. On a touch screen, hold a finger on the title bar for the same menu.
-
-## Keys
-
-| Keys | What they do |
-|---|---|
-| Alt+Tab | holding Alt: a box with the next window; Tab again for the one behind; let go of Alt to go there |
-| Alt+F4 | closes the window in front |
-| Alt+Esc | minimizes the window in front |
-| Ctrl+Esc | the Task List: every window, how much memory each takes |
-| Ctrl+Shift+C, V | copy and paste in the Terminal |
-
-## Program Manager
-
-Double click a program (tap it) to start it. Programs you install with a
-desktop entry (most programs with windows) come in the groups by their kind;
-**File > New** adds one of your own, with its command line, to any group.
-Programs in **StartUp** start with the desktop. **Options > Refresh** (F5)
-looks for programs installed since.
-
-**Setup** (in Main) installs more: browsers, office, development, graphics,
-music and video, games, fonts. Check what you want, clear what you want gone;
-Termux's packages do the work underneath (pkg). The programs open when the
-desktop ended open again when it starts (Control Panel > Desktop to stop it).
-
-The **Games** group has Minesweeper, Solitaire and Reversi.
-
-## Termux on Android
-
-Keep Termux awake (Control Panel > Desktop), set Termux and Termux:X11 to
-"Unrestricted" battery use, and turn off the phantom process killer
-(Developer options > Disable child process restrictions), or Android may
-stop the programs you started while you are in another app.
-"""
 
 var
   groups: seq[Group]
   icons: Table[string, Bitmap]
   minimizeOnUse = false
   saveOnExit = true
-  showNew, showProps, showAbout, showHelp, showDelete: bool
+  showNew, showProps, showAbout, showDelete: bool
   newName, newCommand, newIcon: string
   newGroup = 0
   propsGroup: Group
@@ -100,6 +55,55 @@ proc companionItem(name, exe, art, comment: string; list: var seq[Item]) =
     var it = builtin(name, quoteShell(p), art, comment)
     it.icon = exe
     list.add it
+
+proc pickExe(folder: string): string =
+  ## The program a DOS game's folder starts with: one named like the folder,
+  ## else its .BAT, else its largest .EXE (not SETUP or INSTALL).
+  var best = ""
+  var bestScore = -1
+  let stem = folder.extractFilename.toLowerAscii
+  for kind, path in walkDir(folder):
+    if kind notin {pcFile, pcLinkToFile}: continue
+    let (_, name, ext) = path.splitFile
+    let e = ext.toLowerAscii
+    if e notin [".exe", ".com", ".bat"]: continue
+    let n = name.toLowerAscii
+    if n in ["setup", "install", "uninst", "uninstal", "config", "setsound", "readme"]: continue
+    var score = int(min(getFileSize(path), 9_000_000) div 1000)
+    if n.len >= 3 and stem.startsWith(n[0 ..< min(n.len, 4)]): score += 50_000
+    if e == ".bat": score += 20_000
+    if score > bestScore:
+      bestScore = score
+      best = path
+  best
+
+proc dosItems(): seq[Item] =
+  ## DOSBox-X with ~/DOS as its drive C:, and a program for each game there
+  ## (a folder each, or a program at its top) -- when DOSBox-X is installed.
+  let box = findExe("dosbox-x")
+  if box.len == 0: return
+  let dir = dosDir()
+  try:
+    if not dirExists(dir):
+      createDir(dir)
+      writeFile(dir / "README.TXT", "Put your DOS games and programs here, a folder each. Program " &
+                "Manager's DOS group shows them, and DOSBox-X runs them with this folder as drive C:.\r\n")
+  except CatchableError: discard
+  proc run(rel: string): string =
+    result = quoteShell(box) & " -fastlaunch -c " & quoteShell("mount c \"" & dir & "\"") & " -c c:"
+    if rel.len > 0:
+      let folder = rel.parentDir
+      if folder.len > 0 and folder != ".": result &= " -c " & quoteShell("cd \\" & folder.replace("/", "\\"))
+      result &= " -c " & quoteShell(rel.extractFilename)
+  result.add builtin("DOSBox-X", run(""), "dos", "A DOS PC; the folder DOS in your home is its drive C:")
+  for kind, path in walkDir(dir):
+    if kind in {pcDir, pcLinkToDir}:
+      let exe = pickExe(path)
+      if exe.len > 0:
+        result.add builtin(path.extractFilename, run(exe.relativePath(dir)), "dos",
+                           "In DOSBox-X: " & exe.relativePath(dir))
+    elif path.splitFile.ext.toLowerAscii in [".exe", ".com", ".bat"]:
+      result.add builtin(path.splitFile.name, run(path.extractFilename), "dos", "In DOSBox-X")
 
 proc groupNamed(name: string): Group =
   for g in groups:
@@ -157,6 +161,9 @@ proc loadGroups() =
                    "Retro Browser: Firefox in the desktop's look, on a profile of its own")
   main.add builtin("Setup", selfCommand("setup"), "setup",
                    "Programs to install, from Termux's packages: browsers, office, games...")
+  if inTermux():
+    main.add builtin("Android Files", selfCommand("storage"), "storage",
+                     "Your phone's photos, downloads and documents, in File Manager")
   main.add builtin("Read Me", "?help", "readme", "How the desktop works")
   companionItem("Notepad", "retro-notepad", "notepad", "Text files", acc)
   companionItem("Paintbrush", "retro-photo", "paint", "Retro Photo: pictures and painting", acc)
@@ -171,10 +178,21 @@ proc loadGroups() =
   acc.add builtin("Clock", selfCommand("clock"), "clock", "The time, on a face or in numbers")
   groupNamed("Main").items = main
   groupNamed("Accessories").items = acc
-  groupNamed("Games").items = @[
+  var games = @[
     builtin("Minesweeper", selfCommand("mines"), "mines", "Find the mines without stepping on one"),
     builtin("Solitaire", selfCommand("solitaire"), "cards", "Klondike, as 3.1 had it"),
     builtin("Reversi", selfCommand("reversi"), "reversi", "Turn the computer's pieces over")]
+  # (Freedoom, once Setup put it here)
+  let doom = findExe("chocolate-doom")
+  let wads = gameDataDir("freedoom")
+  if doom.len > 0:
+    for (name, wad) in [("Freedoom", "freedoom1.wad"), ("Freedoom: Phase 2", "freedoom2.wad")]:
+      if fileExists(wads / wad):
+        games.add builtin(name, quoteShell(doom) & " -iwad " & quoteShell(wads / wad), "doom",
+                          "A free Doom, in Chocolate Doom")
+  groupNamed("Games").items = games
+  let dos = dosItems()
+  if dos.len > 0: groupNamed("DOS").items = dos
   for e in installedApps():
     groupNamed(groupOf(e)).items.add Item(name: e.name, command: e.command, comment: e.comment,
                                           icon: e.icon, terminal: e.terminal, custom: -1)
@@ -216,7 +234,7 @@ proc pictureOf(it: Item; px: int): Bitmap =
 
 proc start(it: Item) =
   case it.command
-  of "?help": showHelp = true
+  of "?help": openHelp("desktop")
   else:
     var cmd = it.command
     if it.terminal: cmd = terminalCommand() & " -e " & cmd
@@ -282,7 +300,9 @@ proc menus() =
     menu "&Window":
       mdiWindowMenu()
     menu "&Help":
-      if menuItem("&Read Me", "F1"): showHelp = true
+      if menuItem("&Help Topics", "F1"): openHelp("progman")
+      if menuItem("&Read Me"): openHelp("desktop")
+      if menuItem("&Tour..."): launch(selfCommand("tour"))
       menuSeparator()
       if menuItem("&About Program Manager..."): showAbout = true
   if hotkeyPressed("Ctrl+N"):
@@ -291,7 +311,7 @@ proc menus() =
   if hotkeyPressed("F5"): loadGroups()
   if hotkeyPressed("Shift+F5"): mdiCascade()
   if hotkeyPressed("Shift+F4"): mdiTile()
-  if hotkeyPressed("F1"): showHelp = true
+  if hotkeyPressed("F1"): openHelp("progman")
   if hotkeyPressed("Alt+Enter") and hasItem:
     propsGroup = g
     propsIndex = g.sel
@@ -362,12 +382,6 @@ proc dialogs() =
         saveProgItems(items)
         loadGroups()
     else: showDelete = false
-  if showHelp:
-    dialog(showHelp, "Read Me", 560):
-      markdownView(HelpText, height = dp(360))
-      row:
-        spring()
-        if button("OK", isDefault = true): showHelp = false
   aboutBox(showAbout, "Program Manager", DesktopVersion,
            [DesktopName & " " & DesktopVersion, "Memory: " & memoryReport(false)])
 

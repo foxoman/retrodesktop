@@ -57,10 +57,25 @@ one program of about 5 MB, nothing to set up.
   (with Date/Time and the screen savers: Blank Screen, Starfield, Mystify,
   Marquee).
 - **The games:** Minesweeper, Solitaire (Klondike, the bouncing cards
-  when you win) and Reversi, drawn for a mouse and for a finger.
+  when you win) and Reversi, drawn for a mouse and for a finger; Freedoom
+  (a free Doom, from Setup); and a **DOS** group: install DOSBox-X with
+  Setup, put your DOS games in the folder `DOS` in your home, a folder
+  each, and they are there, a double click away.
 
   ![Games](docs/games.png)
 
+- **Sounds, wallpapers, colors:** chimes of the desktop's own for its
+  events (Control Panel > Sound; through PulseAudio or Android), nine
+  pixel-art wallpapers (Bricks, Tartan, Argyle, Circuit, Starry Night,
+  Waves, Checkers, Marble, Sunset) and more color schemes (Emerald City,
+  Rose, Slate, Bordeaux, Canyon, Tweed, Leather, Neon, and Sunlight for a
+  phone outdoors, beside Hot Dog and the rest).
+
+  ![The desktop's wallpapers](docs/wallpapers.png)
+
+- **Help everywhere:** F1 (or Help > Help Topics) in every program opens
+  its page of Help, with links between the pages; the first start offers a
+  short tour.
 - **Opening files and links:** a file opened from File Manager (or a link
   from any of the desktop's programs) goes to the program for its kind --
   the one you chose ("Always use this program"), else the one that says it
@@ -84,7 +99,16 @@ one program of about 5 MB, nothing to set up.
   part of what the programs share). At rest the desktop takes no CPU and
   about 15 MB; Clock, Calculator and the others about 6 MB each.
   Program Manager keeps the icons it drew (`~/.cache/retrodesktop`), so
-  it opens quicker the next time.
+  it opens quicker the next time; it comes first at the start, the other
+  programs after it. Minimized programs can be paused (Control Panel >
+  Windows): no CPU, no battery, until you bring them back. OpenGL programs
+  can draw on Android's GPU (Setup > System > 3D graphics: VirGL; the
+  desktop starts its server).
+- **Android:** Main > Android Files shows the phone's photos, downloads
+  and documents (it asks Android the first time); Android's Back closes the
+  window in front (when Termux:X11 sends it as Back); programs'
+  notifications (`notify-send`) become Android notifications with
+  Termux:API, or a box at the bottom of the screen.
 
 ![Frames for fingers, at 150 %](docs/tablet.png)
 
@@ -97,7 +121,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.5_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.6_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -144,6 +168,8 @@ issue. `pkill retro-desktop` ends the desktop and all its programs.
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
 | Ctrl+Esc | Task List |
+| F1 | Help, at the page of the program in front |
+| Android's Back | closes the window in front |
 | Ctrl+Shift+C, Ctrl+Shift+V | copy and paste in the Terminal |
 | Shift+PgUp, Shift+PgDn | the Terminal's scrollback |
 
@@ -161,7 +187,9 @@ Every part is also a command: `retro-desktop progman`, `control`,
 `browser` (Retro Browser; pages to open after it), `setup` (`setup gimp`:
 one program at once), `write` (a document after it), `open` (a file or a
 link, in its program), `clipboard`, `mines`, `solitaire`, `reversi`,
-`run`, `clock`, `calc`, `calendar`, `cardfile`.
+`run`, `help` (a topic after it), `tour`, `storage` (Android Files), `notify`
+(as `notify-send`), `sound` (an event's sound), `clock`, `calc`, `calendar`,
+`cardfile`.
 
 ## On a Linux computer
 
@@ -176,7 +204,7 @@ Xephyr :2 -screen 1280x800 & DISPLAY=:2 retro-desktop
 ## Building it
 
 You need [Nim](https://nim-lang.org) 2.2 or later and
-[Retro Nim UI](https://github.com/foxoman/retroui) 0.20.7 or later.
+[Retro Nim UI](https://github.com/foxoman/retroui) 0.20.8 or later.
 
 ```sh
 nimble install retroui
@@ -198,7 +226,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.5 && git push origin v0.1.5`).
+tag is pushed (`git tag v0.1.6 && git push origin v0.1.6`).
 
 ## How it works
 

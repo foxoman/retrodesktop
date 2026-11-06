@@ -15,7 +15,8 @@ alike.
   part it is (none: the desktop; `progman`, `control`, `tasklist`,
   `terminal`, `browser`, `setup`, `write`, `clipboard`, `open`, `mines`,
   `solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`,
-  `clock`, `calc`, `calendar`, `cardfile`).
+  `help`, `tour`, `storage`, `notify`, `sound`, `clock`, `calc`, `calendar`,
+  `cardfile`).
 - `src/retrodesktop/`:
   - `wm.nim` -- the window manager (frames, focus, keys, EWMH/ICCCM), on the
     desktop's X connection through Retro Nim UI's `x11EventHook`
@@ -35,6 +36,8 @@ alike.
   - `opener.nim` -- `open`: files and links to their program; the desktop's
     own `xdg-open`
   - `saver.nim` -- the screen savers, and the idle time (libXss)
+  - `sounds.nim` -- the chimes (synthesized into WAV files) and playing them
+  - `help.nim` -- Help's topics (F1 in every program) and the tour
   - `theming.nim` -- the look given to other programs (XSETTINGS, X
     resources, fontconfig, the GTK theme)
   - `link.nim` -- how the programs talk to the desktop (EWMH messages,
@@ -80,6 +83,10 @@ alike.
    dialogs with `asDialog`), not dialogs drawn on the desktop.
    Programs Setup offers are checked against Termux's repositories
    (termux-packages: packages/, x11-packages/) before they go in the list.
+   Every program of the desktop calls `helpKeys(topic)` each frame and has
+   Help > Help Topics; a new program gets a topic in `help.nim`. The art
+   (icons, wallpapers, card backs, chimes) is the desktop's own, drawn or
+   synthesized in code: nothing copied from Windows.
 7. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
    that keeps the CPU awake when nothing changes (`wakeIn` only as needed),
    memory let go when the phone runs short (`onMemoryPressure`).

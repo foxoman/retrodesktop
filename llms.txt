@@ -12,12 +12,13 @@ with an argument one of its programs: `progman` (Program Manager),
 userChrome.css on its own profile), `setup` (Setup: Termux programs to
 install or remove, apt-get underneath), `write` (Write), `clipboard`
 (Clipboard Viewer), `open FILE` (a file or link in its program), `mines`,
-`solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`, `clock`,
-`calc`, `calendar`, `cardfile`.
+`solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`, `help
+[topic]`, `tour`, `storage` (Android Files), `notify` (as notify-send),
+`sound EVENT`, `clock`, `calc`, `calendar`, `cardfile`.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
-- Build: `nimble build -d:release` (needs retroui >= 0.20.7); the Termux
+- Build: `nimble build -d:release` (needs retroui >= 0.20.8); the Termux
   package: `sh tools/build-deb.sh`.
 - The window manager runs on the desktop's own X connection (retroui's
   `x11EventHook`); frames are X windows with title bars drawn by retroui's
@@ -50,6 +51,12 @@ install or remove, apt-get underneath), `write` (Write), `clipboard`
   release chooses); frames snap to edges while moved; the programs open
   (their command lines from /proc, their windows' places) are kept in
   "retrodesktop-session" and opened again at the next start.
+- Sounds: synthesized WAVs in ~/.local/share/retrodesktop/sounds, played
+  with paplay (or termux-media-player, aplay); settings "sounds",
+  "sound.<event>". Wallpapers "@Name" are drawn by art.nim.
+- Minimized programs can be paused (SIGSTOP; setting "pauseIconic"); VirGL
+  (setting "gpu") starts virgl_test_server_android and sets
+  GALLIUM_DRIVER=virpipe for the programs started after.
 - The screen saver starts from the desktop when XScreenSaverQueryInfo
   (libXss) says the screen was idle for the delay.
 - Sizes in the window manager are the screen's own pixels: `devScale()` =

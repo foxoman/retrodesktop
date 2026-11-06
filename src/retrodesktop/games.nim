@@ -11,7 +11,7 @@
 
 import std/[random, times, math, strutils, tables, algorithm]
 import retroui
-import common, link
+import common, link, help
 
 const GamesSettings = "retrodesktop-games"
 
@@ -255,6 +255,7 @@ proc runMines*() =
   showArt("mines")
   followLook()
   while beginFrame():
+    helpKeys("mines")
     var levelTo = -1
     menubar:
       menu "&Game":
@@ -267,6 +268,8 @@ proc runMines*() =
         menuSeparator()
         if menuItem("E&xit"): quitApp()
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("mines")
+        menuSeparator()
         if menuItem("&About Minesweeper..."): mShowAbout = true
     if hotkeyPressed("F2"): newMines()
     if levelTo >= 0:
@@ -625,6 +628,7 @@ proc runSolitaire*() =
   showArt("cards")
   followLook()
   while beginFrame():
+    helpKeys("solitaire")
     menubar:
       menu "&Game":
         if menuItem("&Deal", "F2"): newDeal()
@@ -641,6 +645,8 @@ proc runSolitaire*() =
         menuSeparator()
         if menuItem("E&xit"): quitApp()
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("solitaire")
+        menuSeparator()
         if menuItem("&About Solitaire..."): sShowAbout = true
     if hotkeyPressed("F2"): newDeal()
     if hotkeyPressed("Ctrl+Z") and undoList.len > 0: game = undoList.pop()
@@ -979,6 +985,7 @@ proc runReversi*() =
   showArt("reversi")
   followLook()
   while beginFrame():
+    helpKeys("reversi")
     let youCan = rTurn == 1 and moves(rb, 1).len > 0
     menubar:
       menu "&Game":
@@ -1000,6 +1007,8 @@ proc runReversi*() =
             rSkill = i
             keepGame("reversi.skill", $i)
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("reversi")
+        menuSeparator()
         if menuItem("&About Reversi..."): rShowAbout = true
     if hotkeyPressed("F2"): newReversi()
     if hotkeyPressed("H") and youCan: rHint = bestMove(rb, 1, 2)

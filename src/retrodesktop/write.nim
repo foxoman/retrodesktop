@@ -8,7 +8,7 @@
 import std/[os, strutils]
 import retroui
 import retroui/richedit
-import common, link
+import common, link, help
 
 var
   doc: RichDoc
@@ -83,6 +83,7 @@ proc runWrite*(args: seq[string]) =
   followLook()
   doc.spell = false
   while beginFrame():
+    helpKeys("write")
     let wanted = "Write - " & docName()
     if ui.title != wanted: setTitle(wanted)
     if closeRequested() and not saved:
@@ -121,6 +122,8 @@ proc runWrite*(args: seq[string]) =
         if menuItem("&Bullets", checked = richParaKind(doc) == pkBullet): richList(doc, pkBullet)
         if menuItem("&Numbers", checked = richParaKind(doc) == pkNumber): richList(doc, pkNumber)
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("write")
+        menuSeparator()
         if menuItem("&About Write..."): showAbout = true
     if hotkeyPressed("Ctrl+N"): ask("new")
     if hotkeyPressed("Ctrl+O"): ask("open")

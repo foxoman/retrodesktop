@@ -17,7 +17,7 @@
 
 import std/[os, osproc, strutils, strtabs, posix, times]
 import retroui
-import common, link
+import common, link, help
 
 type
   Offer = object
@@ -26,10 +26,12 @@ type
       ## repository), "x11" or "tur", `cli` the command of a program for the
       ## Terminal ("" for a program with windows)
     big: bool                  ## a large one (hundreds of MB)
+    fetch: string              ## a zip to download after (free game data), "" none
+    needs: string              ## packages the download needs (not removed with it)
 
   Screen = enum scChoose, scChecking, scConfirm, scWorking, scDone, scFailed, scManual
 
-  StepKind = enum stRepo, stUpdate, stInstall, stRemove
+  StepKind = enum stRepo, stUpdate, stInstall, stRemove, stFetch
 
   Step = object
     kind: StepKind
@@ -43,8 +45,11 @@ type
     running: bool
     code: int
 
-proc offer(group, name, pkgs, repo, about: string; cli = ""; big = false): Offer =
-  Offer(group: group, name: name, pkgs: pkgs, repo: repo, about: about, cli: cli, big: big)
+proc offer(group, name, pkgs, repo, about: string; cli = ""; big = false; fetch = "";
+           needs = ""): Offer =
+  Offer(group: group, name: name, pkgs: pkgs, repo: repo, about: about, cli: cli, big: big,
+        fetch: fetch, needs: needs)
+
 
 let Offers = @[
   # (every name checked against Termux's packages: termux-packages' packages
@@ -87,12 +92,18 @@ let Offers = @[
   offer("Games", "mGBA", "mgba", "x11", "A Game Boy Advance, for the games you own"),
   offer("Games", "Chess", "xboard gnuchess", "x11", "XBoard with GNU Chess to play against"),
   offer("Games", "NetHack", "nethack", "", "The dungeon, in the Terminal", cli = "nethack"),
+  offer("Games", "Freedoom", "chocolate-doom", "x11",
+        "A free Doom: two games of 32 levels (Chocolate Doom, and 23 MB of levels from GitHub)",
+        fetch = "https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip",
+        needs = "curl unzip"),
   offer("System", "Midnight Commander", "mc", "", "Files in two panels, in the Terminal", cli = "mc"),
   offer("System", "htop", "htop", "", "What runs, and what it takes, in the Terminal", cli = "htop"),
   offer("System", "Xarchiver", "xarchiver", "x11", "Zip, 7z and tar archives"),
   offer("System", "Fastfetch", "fastfetch", "", "Your system at a glance, in the Terminal", cli = "fastfetch; read -n 1 -p 'Press a key'"),
   offer("System", "Termux:API tools", "termux-api", "", "The phone's clipboard and notifications (needs the Termux:API app)"),
   offer("System", "QEMU", "qemu-system-x86-64", "x11", "A whole PC in a window, for other systems", big = true),
+  offer("System", "3D graphics", "virglrenderer-android mesa", "",
+        "OpenGL programs and games drawn by Android's GPU (VirGL)"),
   offer("Fonts", "DejaVu", "ttf-dejavu", "", "Fonts with more letters and symbols"),
   offer("Fonts", "Noto CJK", "otf-noto-sans-cjk", "", "Chinese, Japanese and Korean letters", big = true),
   offer("Fonts", "Nerd Font symbols", "ttf-nerd-fonts-symbols", "", "The icons of shell prompts and tools")]
@@ -141,6 +152,14 @@ proc readInstalled() =
     var all = true
     for p in o.packages:
       if p notin have: all = false
+    if o.fetch.len > 0:
+      # (its download there too: the folder with something in it)
+      var some = false
+      let dir = gameDataDir(o.name.toLowerAscii)
+      if dirExists(dir):
+        for kind, f in walkDir(dir):
+          if f.endsWith(".wad"): some = true
+      if not some: all = false
     installed[i] = all
 
 proc repoReady(repo: string): bool =
@@ -237,6 +256,13 @@ proc aptArgs(s: Step): seq[string] =
       "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"] & s.pkgs
   of stUpdate: @["apt-get", "update"]
   of stRemove: @["apt-get", "remove", "-y", "--autoremove", "-o", "APT::Status-Fd=1"] & s.pkgs
+  of stFetch:
+    # (pkgs: the address, then the folder: downloaded, unzipped there)
+    let dir = s.pkgs[1]
+    let zip = dir & ".zip"
+    @["sh", "-c", "mkdir -p " & quoteShell(dir) & " && curl -L --fail -o " & quoteShell(zip) & " " &
+      quoteShell(s.pkgs[0]) & " && unzip -o -j " & quoteShell(zip) & " '*.wad' '*.txt' -d " &
+      quoteShell(dir) & " && rm -f " & quoteShell(zip)]
 
 proc weight(s: Step): float =
   case s.kind
@@ -244,6 +270,7 @@ proc weight(s: Step): float =
   of stUpdate: 2.0
   of stInstall: 8.0
   of stRemove: 3.0
+  of stFetch: 4.0
 
 proc gauge(): float =
   var total, done = 0.0
@@ -301,17 +328,25 @@ proc plan() =
   for i in toAdd:
     let o = Offers[i]
     if o.repo.len > 0 and not repoReady(o.repo) and o.repo notin repos: repos.add o.repo
-    for p in o.packages:
+    for p in o.packages & o.needs.splitWhitespace:
       if p notin pk: pk.add p
   for r in repos: steps.add Step(kind: stRepo, pkgs: @[r & "-repo"])
   if pk.len > 0 and (needUpdate or forceUpdate or repos.len > 0 or listsAge() > 24):
     steps.add Step(kind: stUpdate)
   if pk.len > 0: steps.add Step(kind: stInstall, pkgs: pk)
+  for i in toAdd:
+    if Offers[i].fetch.len > 0:
+      steps.add Step(kind: stFetch, pkgs: @[Offers[i].fetch, gameDataDir(Offers[i].name.toLowerAscii)])
   var rm: seq[string]
   for i in toRemove:
     for p in Offers[i].packages:
       if p notin rm: rm.add p
   if rm.len > 0: steps.add Step(kind: stRemove, pkgs: rm)
+  # (the game data downloaded goes with its game)
+  for i in toRemove:
+    if Offers[i].fetch.len > 0:
+      try: removeDir(gameDataDir(Offers[i].name.toLowerAscii))
+      except CatchableError: discard
 
 proc startStep() =
   stepGauge = 0
@@ -323,6 +358,7 @@ proc startStep() =
           of stUpdate: "Reading the lists of programs"
           of stInstall: "Installing " & names(toAdd)
           of stRemove: "Removing " & names(toRemove)
+          of stFetch: "Downloading " & s.pkgs[1].extractFilename & "'s levels"
   status = ""
   job.start(aptArgs(s))
 
@@ -343,6 +379,14 @@ proc readStatus(l: string) =
       status = f[3]
     else:
       status = "Problem: " & f[3]
+  elif s.kind == stFetch:
+    # (curl's meter: "45 28.1M   45 12.7M ...", the percent first)
+    let w = l.strip.splitWhitespace
+    if w.len > 3:
+      try:
+        stepGauge = parseFloat(w[0]) / 100 * 0.9
+        status = "Downloading: " & w[0] & " % of " & w[1]
+      except ValueError: discard
   elif s.kind == stUpdate and (l.startsWith("Get:") or l.startsWith("Hit:") or l.startsWith("Ign:")):
     inc updateLines
     stepGauge = min(0.95, float(updateLines) / 12)
@@ -638,6 +682,7 @@ proc runSetup*(args: seq[string]) =
   maximizeSelf()
   if asked.len > 0: choose()
   while beginFrame():
+    helpKeys("setup")
     backdrop()
     case screen
     of scChoose: chooseDialog()

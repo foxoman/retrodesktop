@@ -5,9 +5,9 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, osproc, strutils, streams]
+import std/[os, osproc, streams]
 import retroui
-import common, link
+import common, link, help
 
 proc androidClipboard(): bool = findExe("termux-clipboard-get").len > 0
 
@@ -23,6 +23,7 @@ proc runClipboard*() =
   var savePath = getHomeDir() / "Clipboard.txt"
   var said = ""
   while beginFrame():
+    helpKeys("clipboard")
     # (looked at again every two seconds: a program copied something)
     if ui.now - lookedAt >= 2000:
       lookedAt = ui.now
@@ -56,6 +57,8 @@ proc runClipboard*() =
             discard p.waitForExit()
             p.close()
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("clipboard")
+        menuSeparator()
         if menuItem("&About Clipboard Viewer..."): showAbout = true
     if hotkeyPressed("Delete") and text.len > 0:
       putClipboardText("")

@@ -15,7 +15,7 @@ import std/[os, strutils, unicode, posix, locks, math]
 import retroui
 import retroui/uirelays/drivers/x11_driver
 from retroui/typeset import hasGlyphs
-import xlib, common, link
+import xlib, common, link, help
 import vt
 
 # ---- the pseudo-terminal --------------------------------------------------------------------------
@@ -708,6 +708,7 @@ proc runTerminal*(args: seq[string]) =
   var thread: Thread[void]
   var lastTitle = ""
   while beginFrame():
+    helpKeys("terminal")
     keys()
     menubar:
       menu "&Edit":
@@ -741,6 +742,8 @@ proc runTerminal*(args: seq[string]) =
           keepSettings()
           measure()
       menu "&Help":
+        if menuItem("&Help Topics", "F1"): openHelp("terminal")
+        menuSeparator()
         if menuItem("&About Terminal..."): showAbout = true
     let r = canvas(-1, remainingH())
     # the grid fills the place: the shell is told when its size changes

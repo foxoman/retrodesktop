@@ -9,7 +9,7 @@
 import std/[os, strutils, tables, math, times, posix]
 import retroui
 import retroui/uirelays/drivers/x11_driver
-import xlib, common, theming, wm, link, art, boxes, opener, saver
+import xlib, common, theming, wm, link, art, boxes, opener, saver, sounds
 
 var
   conf: Settings
@@ -18,6 +18,7 @@ var
   tile: Bitmap                   # the pattern, ready to repeat
   wallPath, wallMode: string
   wall: Bitmap                   # the wallpaper, at the screen's size
+  wallTile: Bitmap               # one of the desktop's own wallpapers, a tile
   wallFor: (int, int)            # ... made for this size
   touchMode: bool                # icons open with one tap
   iconSel = -1
@@ -48,20 +49,26 @@ proc readSettings() =
   wallMode = conf.setting("wallpaperMode", "fill")
   tile = nil
   wall = nil
+  wallTile = nil
   wallFor = (0, 0)
   # (the time zone Control Panel set, for the programs started from now on)
   let tz = conf.setting("timezone", "").strip
   if tz.len > 0: putEnv("TZ", tz)
   elif firstTz.len > 0: putEnv("TZ", firstTz)
   else: delEnv("TZ")
+  wm.pauseIconic = conf.setting("pauseIconic", "off") == "on"
+  if not wm.pauseIconic: wm.resumeAll()
   touchMode = conf.onOff("touch", inTermux())
   wm.bigFrames = touchMode
   wm.maximizeNew = conf.onOff("maximizeNew", inTermux() and phoneScreen())
+
+proc useGpu()
 
 proc relook() =
   ## The settings changed (Control Panel): the desktop, its frames and the
   ## other programs take them.
   readSettings()
+  useGpu()
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -84,7 +91,7 @@ proc wakeLock(on: bool) =
 const
   SessionSettings = "retrodesktop-session"
   NotAgain = ["", "session", "desktop", "progman", "tasklist", "run", "about", "exit",
-              "welcome", "setup", "open", "saver"]
+              "welcome", "setup", "open", "saver", "help", "tour", "notify", "storage", "sound"]
     ## (the desktop's own parts that are not opened again: Program Manager
     ## starts by itself, the rest are dialogs)
 
@@ -159,15 +166,55 @@ proc reopen() =
 
 # ---- starting and ending -----------------------------------------------------------------------------
 
+proc running(name: string): bool =
+  ## A process called `name` runs (from /proc).
+  for kind, path in walkDir("/proc"):
+    if not path.extractFilename.allCharsInSet(Digits): continue
+    try:
+      let args = readFile(path / "cmdline").split('\0')
+      if args.len > 0 and args[0].extractFilename == name: return true
+    except CatchableError: discard
+
+proc useGpu() =
+  ## 3D through Android's GPU (VirGL), when it is installed and not turned
+  ## off: its server started, the programs started from now on told to use it.
+  let on = conf.setting("gpu", "auto") != "off" and findExe("virgl_test_server_android").len > 0
+  if on:
+    if not running("virgl_test_server_android"): launch("virgl_test_server_android")
+    putEnv("GALLIUM_DRIVER", "virpipe")
+    putEnv("MESA_GL_VERSION_OVERRIDE", "4.0")
+  elif getEnv("GALLIUM_DRIVER") == "virpipe":
+    delEnv("GALLIUM_DRIVER")
+    delEnv("MESA_GL_VERSION_OVERRIDE")
+
+var
+  tookOver = false
+  restStarted = false
+  startedAt = 0
+
 proc startPrograms() =
-  ## Program Manager (when it is not open already) and StartUp -- not when
-  ## this desktop took the windows of one before it: they are running.
-  let tookOver = managing and wm.clients.len > 0
-  if conf.setting("startProgman", "on") != "off" and findWindow("Program Manager") == 0:
-    launch(selfCommand("progman"))
+  ## Program Manager first (when it is not open already), and what the
+  ## programs need running (the sound, the GPU); the rest -- StartUp, the
+  ## programs open last time -- once Program Manager is there (`startRest`):
+  ## the desktop is usable sooner. Not when this desktop took the windows of
+  ## one before it: they are running.
+  tookOver = managing and wm.clients.len > 0
+  startedAt = ui.now
   # (the sound, for every program: PulseAudio, when it is installed)
   if findExe("pulseaudio").len > 0 and execShellCmd("pulseaudio --check >/dev/null 2>&1") != 0:
     launch("pulseaudio --start --exit-idle-time=-1")
+  useGpu()
+  if conf.setting("startProgman", "on") != "off" and findWindow("Program Manager") == 0:
+    launch(selfCommand("progman"))
+  if not tookOver: playSound("start", conf)
+
+proc startRest() =
+  if restStarted: return
+  if ui.now - startedAt < 4000 and conf.setting("startProgman", "on") != "off" and
+     findWindow("Program Manager") == 0:
+    wakeIn(250)
+    return
+  restStarted = true
   if not tookOver:
     for it in progItems():
       if it.group == "StartUp": launch(it.command)
@@ -181,6 +228,8 @@ proc beginExit*() =
   # (what is open now is what opens next time: not the windows closing)
   keepSession()
   sessionFrozen = true
+  playSound("exit", conf)
+  wm.sound = nil
   exitUntil = ui.now + 4000
   if managing: wm.closeAll()
 
@@ -238,7 +287,25 @@ proc drawBackground() =
           drawBitmap(rect(x, y, side, side), tile)
           x += side
         y += side
-  if wallPath.len > 0 and fileExists(wallPath) and not lowMemory:
+  if wallPath.startsWith("@"):
+    # (one of the desktop's own: a scene, or a tile repeated)
+    let name = wallPath[1 .. ^1]
+    let dot = max(1, devPx(2.0))
+    if name == "Sunset":
+      drawSunset(full, max(1, dot div max(1, pxScale)))
+    else:
+      if wallTile == nil: wallTile = wallpaperTile(name, dot)
+      if wallTile != nil:
+        let tw = max(1, wallTile.w div max(1, pxScale))
+        let th = max(1, wallTile.h div max(1, pxScale))
+        var y = 0
+        while y < ui.h:
+          var x = 0
+          while x < ui.w:
+            drawBitmap(rect(x, y, tw, th), wallTile)
+            x += tw
+          y += th
+  elif wallPath.len > 0 and fileExists(wallPath) and not lowMemory:
     let dw = ui.w * max(1, pxScale)
     let dh = ui.h * max(1, pxScale)
     if wall == nil or wallFor != (dw, dh):
@@ -426,6 +493,7 @@ proc watchMemory() =
   onMemoryPressure(proc (level: MemoryPressure) =
     forgetIcons()
     tile = nil
+    wallTile = nil
     if level == mpCritical:
       wall = nil
       lowMemory = true
@@ -548,12 +616,22 @@ proc runSession*() =
   wm.changed = nil
   wm.taskList = openTaskList
   wm.command = onCommand
+  wm.sound = proc (event: string) {.nimcall.} = playSound(event, conf)
+  wm.pausedFile = dataDir(SettingsName) / "paused"
+  # (programs a desktop before this one paused, and left paused: going on)
+  try:
+    for line in readFile(wm.pausedFile).splitLines:
+      if line.strip.len > 0: discard posix.kill(Pid(parseInt(line.strip)), SIGCONT)
+    removeFile(wm.pausedFile)
+  except CatchableError: discard
   managing = wm.start()
   if not managing: showNoWm = true
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
   installOpener()
+  # (Freedoom's levels, where Doom programs look for them)
+  putEnv("DOOMWADDIR", gameDataDir("freedoom"))
   # (Termux awake from the start: Android stops a Termux without it as soon
   # as Termux:X11 is in front -- "X server stalled")
   if conf.setting("wakeLock", "on") == "on": wakeLock(true)
@@ -572,6 +650,7 @@ proc runSession*() =
     if not started and not welcoming:
       started = true
       startPrograms()
+    if started and not restStarted: startRest()
     drawBackground()
     drawIcons()
     desktopMenu()

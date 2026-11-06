@@ -294,6 +294,48 @@ proc drawIcon(c: Canvas2D; kind: string) =
     c.strokeStyle = Black
     c.lineWidth = 1.3
     c.beginPath(); c.moveTo(23, 21); c.lineTo(23, 16); c.moveTo(23, 21); c.lineTo(26, 22); c.stroke()
+  of "sound":
+    # (a loudspeaker and its waves)
+    c.fillStyle = Black
+    c.fillRect(4, 12, 7, 8)
+    c.beginPath(); c.moveTo(11, 12); c.lineTo(18, 6); c.lineTo(18, 26); c.lineTo(11, 20); c.closePath(); c.fill()
+    c.strokeStyle = Navy
+    c.lineWidth = 1.6
+    for k in 1 .. 3:
+      c.beginPath(); c.arc(18, 16, 3.5 * float(k), -PI / 4, PI / 4); c.stroke()
+  of "dos":
+    windowShape(c, 2, 4, 28, 24)
+    c.fillStyle = Black
+    c.fillRect(3, 11, 26, 16)
+    c.fillStyle = Gray
+    c.font = "bold 6px monospace"
+    c.textAlign = "left"
+    c.textBaseline = "middle"
+    c.fillText("C:\\>", 4, 16)
+  of "doom":
+    box(c, 3, 3, 26, 26, "#400000")
+    c.fillStyle = "#ff4000"
+    c.font = "bold 9px sans-serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("FREE", 16, 12)
+    c.fillStyle = Yellow
+    c.fillText("DOOM", 16, 21)
+  of "storage":
+    # (a phone with a folder)
+    box(c, 9, 2, 14, 28, Black)
+    c.fillStyle = "#4080ff"
+    c.fillRect(11, 5, 10, 20)
+    c.fillStyle = Yellow
+    c.fillRect(12, 12, 8, 7)
+    c.fillRect(12, 11, 4, 2)
+  of "help":
+    box(c, 4, 4, 24, 24, Yellow)
+    c.fillStyle = Navy
+    c.font = "bold 18px serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("?", 16, 17)
   of "saver":
     box(c, 2, 3, 28, 21, Gray)
     c.fillStyle = Black
@@ -390,3 +432,146 @@ proc patternTile*(name: string; dot: int; bg, fg: Color; tiles = 16): Bitmap =
       let bit = (row shr (7 - (x div d) mod 8)) and 1
       result.px[y * side + x] = (if bit == 1: f else: b)
   result.opaque = true
+
+# ---- the desktop's own wallpapers ---------------------------------------------------------------------
+
+const BuiltinWallpapers* = ["Bricks", "Tartan", "Argyle", "Circuit", "Starry Night", "Waves",
+                            "Checkers", "Marble", "Sunset"]
+  ## Pixel art of the desktop's own, chosen in Control Panel > Desktop
+  ## (the setting "wallpaper" is "@" and the name). Sunset is a scene, the
+  ## others tiles.
+
+proc rgb(r, g, b: int): uint32 =
+  0xFF000000'u32 or (uint32(clamp(r, 0, 255)) shl 16) or (uint32(clamp(g, 0, 255)) shl 8) or
+    uint32(clamp(b, 0, 255))
+
+proc wallpaperPixel(name: string; x, y: int; w, h: var int): uint32 =
+  ## One pixel of a tile (its size in `w`, `h`), on the tile's own grid.
+  case name
+  of "Bricks":
+    w = 32
+    h = 16
+    let row = y div 8
+    let bx = (x + (if row mod 2 == 1: 8 else: 0)) mod 32
+    if y mod 8 == 7 or bx mod 16 == 15: return rgb(196, 192, 180)
+    let which = ((bx div 16) + row * 3) mod 3
+    let base = [rgb(164, 52, 36), rgb(180, 68, 44), rgb(148, 44, 30)][which]
+    if y mod 8 == 0 or bx mod 16 == 0: return rgb(200, 96, 72)
+    base
+  of "Tartan":
+    w = 32
+    h = 32
+    proc band(v: int): (int, int, int) =
+      if v in 4 .. 11: (0, 32, 96)
+      elif v in 18 .. 19: (176, 0, 0)
+      elif v == 26: (220, 200, 40)
+      else: (0, 88, 40)
+    let a = band(y)
+    let b = band(x)
+    let (r, g, bl) = if (x + y) mod 2 == 0: a else: b
+    rgb((r * 3 + b[0]) div 4, (g * 3 + b[1]) div 4, (bl * 3 + b[2]) div 4)
+  of "Argyle":
+    w = 32
+    h = 32
+    let dx = abs((x mod 32) - 16)
+    let dy = abs((y mod 32) - 16)
+    let inside = dx + dy < 16
+    if (x + y) mod 32 == 0 or (x - y + 64) mod 32 == 0: return rgb(240, 232, 200)
+    if inside: rgb(120, 24, 56) else: rgb(40, 56, 104)
+  of "Circuit":
+    w = 32
+    h = 32
+    let board = rgb(0, 84, 44)
+    let copper = rgb(212, 168, 48)
+    if (y == 8 and x <= 20) or (x == 20 and y >= 8) or (y == 24 and x <= 12) or
+       (x == 28 and y <= 16) or (y == 16 and x >= 28): return copper
+    if x in 3 .. 10 and y in 13 .. 19: return (if (x == 3 or x == 10) and y mod 2 == 1: rgb(200, 200, 200)
+                                               else: rgb(24, 24, 24))
+    for (px, py) in [(20, 30), (12, 24), (28, 2), (0, 8)]:
+      if abs(x - px) <= 1 and abs(y - py) <= 1: return copper
+    if (x * 7 + y * 13) mod 31 == 0: rgb(0, 100, 52) else: board
+  of "Starry Night":
+    w = 64
+    h = 64
+    let star = (x * 73 + y * 151 + x * y * 7) mod 397
+    if star == 0: return rgb(255, 255, 255)
+    if star == 1 or star == 2: return rgb(150, 150, 200)
+    if (abs(x - 20) + abs(y - 40) == 0) or ((x == 20 and abs(y - 40) == 1) or (y == 40 and abs(x - 20) == 1)):
+      return rgb(255, 255, 200)
+    rgb(10, 10, 48 + (y mod 64) div 8)
+  of "Waves":
+    w = 32
+    h = 16
+    let a = 4 + int(round(3 * sin(2 * PI * float(x) / 32)))
+    let b = 12 + int(round(3 * sin(2 * PI * float(x + 16) / 32)))
+    if y == a or y == a + 1: return rgb(96, 192, 216)
+    if y == b: return rgb(0, 72, 104)
+    rgb(0, 112, 144)
+  of "Checkers":
+    w = 16
+    h = 16
+    if ((x div 8) + (y div 8)) mod 2 == 0: rgb(255, 255, 255) else: rgb(192, 192, 192)
+  of "Marble":
+    w = 64
+    h = 64
+    let t = 2 * PI / 64
+    let v = sin(float(x) * t * 2 + 3.2 * sin(float(y) * t) + 1.3 * sin(float(x + y) * t))
+    let g = 216 + int(v * 22)
+    if abs(v) < 0.08: rgb(g - 70, g - 74, g - 60) else: rgb(g, g - 2, g - 6)
+  else:
+    w = 1
+    h = 1
+    rgb(0, 128, 128)
+
+proc wallpaperTile*(name: string; dot: int): Bitmap =
+  ## The built-in wallpaper `name` as a tile, each of its pixels `dot` x `dot`
+  ## pixels of the screen (repeated to some 256 of them, to draw quickly);
+  ## nil for Sunset (a scene: `drawSunset`) or a name not known.
+  if name notin BuiltinWallpapers or name == "Sunset": return nil
+  var w, h = 0
+  discard wallpaperPixel(name, 0, 0, w, h)
+  let d = max(1, dot)
+  let reps = max(1, 256 div (w * d))
+  let bw = w * d * reps
+  let bh = h * d * reps
+  result = newBitmap(bw, bh)
+  for y in 0 ..< bh:
+    for x in 0 ..< bw:
+      var tw, th = 0
+      result.px[y * bw + x] = wallpaperPixel(name, (x div d) mod w, (y div d) mod h, tw, th)
+  result.opaque = true
+
+proc drawSunset*(r: Rect; dot: int) =
+  ## Sunset: the sky going from night to orange, a striped sun on the
+  ## horizon, the sea with the sun's light on it -- in bands of `dot` pixels.
+  let horizon = r.y + r.h * 62 div 100
+  let band = max(2, dot * 3)
+  var y = r.y
+  while y < horizon:
+    let k = (y - r.y) / max(1, horizon - r.y)
+    fill(rect(r.x, y, r.w, min(band, horizon - y)),
+         color(uint8(40 + 215 * k), uint8(10 + 110 * k * k), uint8(90 - 50 * k)))
+    y += band
+  let cx = float(r.x + r.w div 2)
+  let rad = float(min(r.w, r.h)) * 0.18
+  disc(cx, float(horizon), rad, color(255, 200, 40))
+  # (the sun's stripes, wider toward the horizon)
+  var s = 0
+  var sy = horizon - int(rad * 0.45)
+  while sy < horizon:
+    fill(rect(int(cx - rad), sy, int(rad * 2), max(1, dot + s)), color(230, 110, 40))
+    sy += band * 2
+    inc s
+  y = horizon
+  while y < r.y + r.h:
+    let k = (y - horizon) / max(1, r.y + r.h - horizon)
+    fill(rect(r.x, y, r.w, min(band, r.y + r.h - y)),
+         color(uint8(0), uint8(96 - 60 * k), uint8(128 - 70 * k)))
+    y += band
+  # (the light on the sea)
+  var ly = horizon + band
+  var lw = rad * 1.6
+  while ly < r.y + r.h:
+    fill(rect(int(cx - lw / 2), ly, int(lw), max(1, dot)), color(255, 220, 90))
+    ly += band * 2
+    lw *= 0.86
