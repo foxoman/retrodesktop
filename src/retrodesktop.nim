@@ -8,7 +8,7 @@
 
 import std/[os, strutils]
 import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal,
-                     browser]
+                     browser, setup, boxes, games, write, clipboard, opener, saver]
 
 proc usage() =
   echo DesktopName, " ", DesktopVersion, " -- a Windows 3.1 style desktop"
@@ -19,6 +19,11 @@ proc usage() =
   echo "  retro-desktop tasklist    Task List"
   echo "  retro-desktop terminal    Terminal (-e command: runs it in the Terminal)"
   echo "  retro-desktop browser     Retro Browser (Firefox in the desktop's look)"
+  echo "  retro-desktop setup       Setup: programs to install (setup firefox: one at once)"
+  echo "  retro-desktop mines       Minesweeper (solitaire, reversi: the other games)"
+  echo "  retro-desktop write       Write (a document to open after it)"
+  echo "  retro-desktop clipboard   Clipboard Viewer"
+  echo "  retro-desktop open FILE   a file or a link in the program for it"
   echo "  retro-desktop clock       Clock"
   echo "  retro-desktop calc        Calculator"
   echo "  retro-desktop calendar    Calendar"
@@ -42,6 +47,30 @@ when isMainModule:
     if i == 3:
       for k in 3 .. paramCount(): args.add paramStr(k)
     runTerminal(args)
+  of "setup":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runSetup(args)
+  of "mines", "minesweeper": runMines()
+  of "solitaire": runSolitaire()
+  of "reversi": runReversi()
+  of "write":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runWrite(args)
+  of "clipboard": runClipboard()
+  of "open":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runOpen(args)
+  of "saver":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runSaver(args)
+  of "run": runRunBox()
+  of "about": runAboutBox()
+  of "exit": runExitBox()
+  of "welcome": runWelcomeBox()
   of "tasklist", "tasks": runTaskList()
   of "clock": runClock()
   of "calc", "calculator": runCalc()

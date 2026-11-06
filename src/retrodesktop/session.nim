@@ -9,7 +9,7 @@
 import std/[os, strutils, tables, math, times, posix]
 import retroui
 import retroui/uirelays/drivers/x11_driver
-import xlib, common, theming, wm, link, art
+import xlib, common, theming, wm, link, art, boxes, opener, saver
 
 var
   conf: Settings
@@ -21,19 +21,19 @@ var
   wallFor: (int, int)            # ... made for this size
   touchMode: bool                # icons open with one tap
   iconSel = -1
-  focusRun: bool                 # (Run... chosen from the menu: its field focused)
-  showWelcome, showExit, showRun, showAbout, showNoWm: bool
-  welcomeAwake = true
-  runText = ""
+  showNoWm: bool
+  welcoming = false              # the Welcome is open: Program Manager waits for it
   exiting = false
   exitUntil = 0
   wakeLocked = false
   managing = false
   lowMemory = false
   lowSaid = 0
-  raised = false                 # the desktop over the windows (a dialog of its own is open)
+  raised = false                 # the desktop over the windows (its message is open)
 
 # ---- the settings ------------------------------------------------------------------------------------
+
+let firstTz = getEnv("TZ")       # (the time zone the desktop was started with)
 
 proc phoneScreen(): bool =
   ## The screen is a phone's (its shorter side under 600 logical pixels).
@@ -49,6 +49,11 @@ proc readSettings() =
   tile = nil
   wall = nil
   wallFor = (0, 0)
+  # (the time zone Control Panel set, for the programs started from now on)
+  let tz = conf.setting("timezone", "").strip
+  if tz.len > 0: putEnv("TZ", tz)
+  elif firstTz.len > 0: putEnv("TZ", firstTz)
+  else: delEnv("TZ")
   touchMode = conf.onOff("touch", inTermux())
   wm.bigFrames = touchMode
   wm.maximizeNew = conf.onOff("maximizeNew", inTermux() and phoneScreen())
@@ -74,6 +79,84 @@ proc wakeLock(on: bool) =
     launch(cmd)
     wakeLocked = on
 
+# ---- the programs open, kept ------------------------------------------------------------------------
+
+const
+  SessionSettings = "retrodesktop-session"
+  NotAgain = ["", "session", "desktop", "progman", "tasklist", "run", "about", "exit",
+              "welcome", "setup", "open", "saver"]
+    ## (the desktop's own parts that are not opened again: Program Manager
+    ## starts by itself, the rest are dialogs)
+
+var
+  commands: Table[int, string]   # a process's command line, to start it again ("" not)
+  keptSession = ""
+  sessionFrozen = false
+
+proc commandOf(c: Client): string =
+  ## The command line that starts `c`'s program again.
+  if c.class == "RetroBrowser": return selfCommand("browser")
+  if commands.hasKey(c.pid): return commands[c.pid]
+  var args: seq[string]
+  try: args = readFile("/proc/" & $c.pid & "/cmdline").split('\0')
+  except CatchableError: args = @[]
+  while args.len > 0 and args[^1].len == 0: args.setLen(args.len - 1)
+  var quoted: seq[string]
+  for a in args: quoted.add quoteShell(a)
+  if args.len == 0: result = ""
+  elif args[0].extractFilename == "retro-desktop" or args[0] == getAppFilename():
+    result = if args.len < 2 or args[1] in NotAgain: "" else: selfCommand(quoted[1 .. ^1].join(" "))
+  else: result = quoted.join(" ")
+  commands[c.pid] = result
+
+proc sessionNow(): string =
+  ## The programs open and where their windows are, a line each.
+  var seen: seq[int]
+  for c in wm.sessionWindows():
+    if c.pid in seen: continue
+    seen.add c.pid
+    let cmd = commandOf(c)
+    if cmd.len == 0: continue
+    let g = c.savedGeometry
+    result.add [c.class, c.title.replace("\t", " "), cmd, $g.x & "," & $g.y & "," & $g.w & "," & $g.h,
+                (if c.maximized: "m" else: "") & (if c.iconic: "i" else: "")].join("\t") & "\n"
+
+proc keepSession() =
+  ## The programs open, kept when they changed (Android may end Termux at
+  ## any time: the next start opens them again).
+  if sessionFrozen or not managing: return
+  let now = sessionNow()
+  if now == keptSession: return
+  keptSession = now
+  var s = loadSettings(SessionSettings)
+  s["windows"] = now
+  discard saveSettings(SessionSettings, s)
+  if commands.len > 200: commands.clear()
+
+proc reopen() =
+  ## The programs that were open when the desktop ended, opened again, their
+  ## windows where they were (not the ones StartUp starts anyway).
+  if conf.setting("reopen", "on") == "off": return
+  var startup: seq[string]
+  for it in progItems():
+    if it.group == "StartUp": startup.add it.command
+  var started: seq[string]
+  let until = epochTime() + 90
+  for line in loadSettings(SessionSettings).getOrDefault("windows", "").split('\n'):
+    let f = line.split('\t')
+    if f.len < 5: continue
+    let g = f[3].split(',')
+    if g.len == 4:
+      try:
+        wm.pending.add (class: f[0], title: f[1], x: parseInt(g[0]), y: parseInt(g[1]),
+                        w: parseInt(g[2]), h: parseInt(g[3]), maximized: 'm' in f[4],
+                        iconic: 'i' in f[4], until: until)
+      except ValueError: discard
+    let cmd = f[2]
+    if cmd.len > 0 and cmd notin started and cmd notin startup:
+      started.add cmd
+      launch(cmd)
+
 # ---- starting and ending -----------------------------------------------------------------------------
 
 proc startPrograms() =
@@ -82,15 +165,22 @@ proc startPrograms() =
   let tookOver = managing and wm.clients.len > 0
   if conf.setting("startProgman", "on") != "off" and findWindow("Program Manager") == 0:
     launch(selfCommand("progman"))
+  # (the sound, for every program: PulseAudio, when it is installed)
+  if findExe("pulseaudio").len > 0 and execShellCmd("pulseaudio --check >/dev/null 2>&1") != 0:
+    launch("pulseaudio --start --exit-idle-time=-1")
   if not tookOver:
     for it in progItems():
       if it.group == "StartUp": launch(it.command)
+    reopen()
 
 proc beginExit*() =
   ## Ends the session: every program asked to close its windows, the
   ## desktop goes when they did (or after a few seconds).
   if exiting: return
   exiting = true
+  # (what is open now is what opens next time: not the windows closing)
+  keepSession()
+  sessionFrozen = true
   exitUntil = ui.now + 4000
   if managing: wm.closeAll()
 
@@ -113,7 +203,11 @@ proc onCommand(n, arg: int) {.nimcall.} =
     ui.redraw = true
   of RetroLookChanged: relook()
   of RetroExit: beginExit()
-  of RetroAskExit: showExit = true
+  of RetroAskExit: launch(selfCommand("exit"))
+  of RetroWelcomed:
+    welcoming = false
+    conf = desktopSettings()
+    wakeLock(conf.setting("wakeLock", "on") == "on")
   else: discard
   x11Wake()
 
@@ -250,10 +344,7 @@ proc desktopMenuItems(): seq[wm.MenuItem] =
     wm.menuItem("&Task List...", "Ctrl+Esc", true, proc () = openTaskList()),
     wm.menuItem("&Control Panel", "", true, proc () = launch(selfCommand("control"))),
     wm.menuItem("T&erminal", "", true, proc () = launch(selfCommand("terminal"))),
-    wm.menuItem("&Run...", "", true, proc () =
-      showRun = true
-      focusRun = true
-      x11Wake()),
+    wm.menuItem("&Run...", "", true, proc () = launch(selfCommand("run"))),
     wm.menuLine(),
     wm.menuItem("&Cascade", "", true, proc () = wm.cascade()),
     wm.menuItem("&Tile", "", true, proc () = wm.tile()),
@@ -261,12 +352,8 @@ proc desktopMenuItems(): seq[wm.MenuItem] =
       iconSel = -1
       x11Wake()),
     wm.menuLine(),
-    wm.menuItem("&About Retro Desktop...", "", true, proc () =
-      showAbout = true
-      x11Wake()),
-    wm.menuItem("E&xit Retro Desktop...", "", true, proc () =
-      showExit = true
-      x11Wake())]
+    wm.menuItem("&About Retro Desktop...", "", true, proc () = launch(selfCommand("about"))),
+    wm.menuItem("E&xit Retro Desktop...", "", true, proc () = launch(selfCommand("exit")))]
 
 proc desktopMenu() =
   if ui.rpressed and not ui.pressUsed and ui.popup == 0 and ui.dialogTop == 0:
@@ -276,9 +363,6 @@ proc desktopMenu() =
       wm.showMenu(desktopMenuItems(), x, y)
     else:
       openPopupMenu("desktop", ui.mx, ui.my)
-  if focusRun:
-    focusRun = false
-    focusFirstText(inDialog = true)
   popupMenu("desktop"):
     # (with no window manager there are no windows over the desktop: the
     # kit's own menu)
@@ -288,57 +372,18 @@ proc desktopMenu() =
     if menuItem("&Task List...", "Ctrl+Esc"): openTaskList()
     if menuItem("&Control Panel"): launch(selfCommand("control"))
     if menuItem("T&erminal"): launch(selfCommand("terminal"))
-    if menuItem("&Run..."):
-      showRun = true
-      focusFirstText(inDialog = true)
+    if menuItem("&Run..."): launch(selfCommand("run"))
     menuSeparator()
-    if menuItem("&About Retro Desktop..."): showAbout = true
-    if menuItem("E&xit Retro Desktop..."): showExit = true
+    if menuItem("&About Retro Desktop..."): launch(selfCommand("about"))
+    if menuItem("E&xit Retro Desktop..."): launch(selfCommand("exit"))
 
 # ---- the dialogs --------------------------------------------------------------------------------------
 
-proc welcome() =
-  dialog(showWelcome, "Welcome to " & DesktopName, 560):
-    row:
-      image(glyphIcon(pxInfo, ui.theme.text, 32))
-      heading DesktopName & " " & DesktopVersion
-    paragraph "This is your desktop: every program opens here in its own window, " &
-      "with a title bar to move it by, borders to size it by, and the buttons to " &
-      "minimize and maximize it. Program Manager holds your programs, the ones that come " &
-      "with the desktop and every program you install with a desktop entry."
-    paragraph "A right click on the desktop (or a finger held on it) opens its menu. " &
-      "Alt+Tab goes to the next window, Alt+F4 closes one, Ctrl+Esc opens the Task List. " &
-      "Control Panel changes the colors, the fonts, the sizes and the desktop."
-    if inTermux():
-      group "Keep it running on Android":
-        paragraph "Android stops programs it thinks you do not use. For a desktop " &
-          "that stays: let Termux keep the phone awake, set Termux (and Termux:X11) to " &
-          "\"Unrestricted\" in Settings > Apps > Battery, and on Android 12 and later " &
-          "turn off the phantom process killer (Developer options > \"Disable child " &
-          "process restrictions\"; on Android 12L or older, from a computer: adb shell " &
-          "\"settings put global settings_enable_monitor_phantom_procs false\")."
-        paragraph "In Termux:X11's preferences: Display resolution mode \"native\" for " &
-          "sharp text, Touchscreen input mode \"Direct touch\" to tap where you point (or " &
-          "\"Trackpad\" for a pointer), and the additional keyboard bar for Esc, Ctrl, Alt " &
-          "and Tab."
-        checkbox("&Keep Termux awake while the desktop runs (termux-wake-lock)", welcomeAwake)
-    row:
-      spring()
-      if button("OK", isDefault = true):
-        showWelcome = false
-  if not showWelcome and conf.setting("welcomed", "") == "":
-    conf["welcomed"] = DesktopVersion
-    if inTermux():
-      conf["wakeLock"] = (if welcomeAwake: "on" else: "off")
-      wakeLock(welcomeAwake)
-    saveDesktopSettings(conf)
-
 proc keepDialogsInFront() =
-  ## The desktop's own dialogs (Welcome, Run, Exit, About) are drawn on the
-  ## desktop, under every window: while one is open the desktop comes over
-  ## the windows, and goes back under them when it closes.
-  let modal = showWelcome or showRun or showExit or showAbout or showNoWm
-  if modal == raised or not managing: return
+  ## The desktop's one message of its own (another window manager runs) is
+  ## drawn on the desktop: the desktop over the windows while it is open.
+  let modal = showNoWm
+  if modal == raised: return
   raised = modal
   let d = Display(x11Display())
   let me = Window(x11Window())
@@ -347,26 +392,33 @@ proc keepDialogsInFront() =
     discard XSetInputFocus(d, me, RevertToPointerRoot, CurrentTime)
   else:
     discard XLowerWindow(d, me)
-    if wm.active != nil: wm.focus(wm.active)
+    if managing and wm.active != nil: wm.focus(wm.active)
   discard XFlush(d)
 
 proc dialogs() =
-  if showWelcome: welcome()
-  if showRun:
-    if inputBox(showRun, "Run", "Command line:", runText, width = 420) == 1:
-      if runText.strip.len > 0: launch(runText)
-  if showExit:
-    if msgBox(showExit, "Exit " & DesktopName, "This will end your " & DesktopName &
-              " session.\nPrograms still open are asked to close.", ["OK", "Cancel"],
-              miWarning) == 1:
-      beginExit()
   if showNoWm:
     discard msgBox(showNoWm, DesktopName, "Another window manager is running on this screen, " &
                    "so the desktop does not frame the windows. Close it and start " &
                    DesktopName & " again for the full desktop.", ["OK"], miInfo)
-  aboutBox(showAbout, DesktopName, DesktopVersion,
-           ["A Windows 3.1 style desktop for Linux and Termux on Android.",
-            "Memory: " & memoryReport(false)])
+
+# ---- the screen saver ----------------------------------------------------------------------------------
+
+var saverOn = false
+
+proc watchIdle() =
+  ## The screen saver Control Panel chose, once nothing was done for its delay.
+  if conf.setting("saver", "(None)") == "(None)" or exiting: return
+  var delay = 5
+  try: delay = clamp(parseInt(conf.setting("saverDelay", "5")), 1, 120) except ValueError: discard
+  let idle = idleMs(Display(x11Display()))
+  if idle < 0: return
+  if idle >= delay * 60_000:
+    if not saverOn:
+      saverOn = true
+      launch(selfCommand("saver"))
+  else:
+    saverOn = false
+    wakeIn(min(5000, delay * 60_000 - idle + 50))
 
 # ---- memory --------------------------------------------------------------------------------------------
 
@@ -501,15 +553,23 @@ proc runSession*() =
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
+  installOpener()
   # (Termux awake from the start: Android stops a Termux without it as soon
   # as Termux:X11 is in front -- "X server stalled")
   if conf.setting("wakeLock", "on") == "on": wakeLock(true)
   # (the welcome the first time only, not again after an update)
-  if conf.setting("welcomed", "") == "": showWelcome = true
+  var welcomeAt = 0
+  if conf.setting("welcomed", "") == "":
+    welcoming = true
+    welcomeAt = ui.now
+    launch(selfCommand("welcome"))
   var started = false
   while beginFrame():
+    # (a Welcome that never came -- it could not start: the programs anyway)
+    if welcoming and ui.now - welcomeAt > 15_000 and findWindow("Welcome to " & DesktopName) == 0:
+      welcoming = false
     # (the first time, the welcome first: Program Manager comes after it)
-    if not started and not showWelcome:
+    if not started and not welcoming:
       started = true
       startPrograms()
     drawBackground()
@@ -522,6 +582,8 @@ proc runSession*() =
       else: wakeIn(100)
     else:
       discard memoryPressure()
+      if started: keepSession()
+      watchIdle()
       wakeIn(5000)
     endFrame()
   if managing: wm.stop()

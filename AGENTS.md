@@ -12,8 +12,10 @@ alike.
 - Made with Retro Nim UI (`retroui`, https://github.com/foxoman/retroui):
   read its `skills/retroui/SKILL.md` before writing UI code.
 - `src/retrodesktop.nim` -- the program; its first argument says which
-  part it is (none: the desktop; `progman`, `control`, `tasklist`, `clock`,
-  `calc`, `calendar`, `cardfile`).
+  part it is (none: the desktop; `progman`, `control`, `tasklist`,
+  `terminal`, `browser`, `setup`, `write`, `clipboard`, `open`, `mines`,
+  `solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`,
+  `clock`, `calc`, `calendar`, `cardfile`).
 - `src/retrodesktop/`:
   - `wm.nim` -- the window manager (frames, focus, keys, EWMH/ICCCM), on the
     desktop's X connection through Retro Nim UI's `x11EventHook`
@@ -24,6 +26,15 @@ alike.
   - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing
   - `browser.nim` -- Retro Browser: Firefox's profile with the 3.1
     userChrome.css, user.js
+  - `setup.nim` -- Setup: the catalogue of Termux programs (each name
+    checked against termux-packages and x11-packages before it goes in),
+    apt-get with `APT::Status-Fd` underneath
+  - `boxes.nim` -- the desktop's Run, About, Exit and Welcome, each a window
+  - `games.nim` -- Minesweeper, Solitaire, Reversi
+  - `write.nim`, `clipboard.nim` -- Write, Clipboard Viewer
+  - `opener.nim` -- `open`: files and links to their program; the desktop's
+    own `xdg-open`
+  - `saver.nim` -- the screen savers, and the idle time (libXss)
   - `theming.nim` -- the look given to other programs (XSETTINGS, X
     resources, fontconfig, the GTK theme)
   - `link.nim` -- how the programs talk to the desktop (EWMH messages,
@@ -65,6 +76,10 @@ alike.
    never the kit's `popupMenu`. A widget drawn over a program's own screen
    (the Terminal's) takes the mouse only when no menu or dialog is open
    (`ui.popup == 0 and ui.dialogTop == 0`).
+   The desktop's own dialogs are programs of their own (`boxes.nim`, made
+   dialogs with `asDialog`), not dialogs drawn on the desktop.
+   Programs Setup offers are checked against Termux's repositories
+   (termux-packages: packages/, x11-packages/) before they go in the list.
 7. **Android first:** sizes in `dp`, a finger as well as a mouse, nothing
    that keeps the CPU awake when nothing changes (`wakeIn` only as needed),
    memory let go when the phone runs short (`onMemoryPressure`).

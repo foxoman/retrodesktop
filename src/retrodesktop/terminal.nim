@@ -14,6 +14,7 @@
 import std/[os, strutils, unicode, posix, locks, math]
 import retroui
 import retroui/uirelays/drivers/x11_driver
+from retroui/typeset import hasGlyphs
 import xlib, common, link
 import vt
 
@@ -385,6 +386,33 @@ proc boxChar(r: Rune; x, y, w, h: int; c: Color): bool =
     else: discard
   true
 
+var notInMono: Table[int32, bool]
+  ## the letters FreeMono has not (drawn from another font, alone)
+
+proc missing(ch: Rune): bool =
+  let cp = int32(ch)
+  if cp < 0x80: return false
+  if not notInMono.hasKey(cp):
+    notInMono[cp] = not hasGlyphs($ch, faceOf(style(mono = true)))
+  notInMono[cp]
+
+proc fallbackText(ch: Rune; x, y, w, h: int; fg: Color; st: TextStyle) =
+  ## A letter FreeMono has not: from FreeSans or FreeSerif (GNU FreeFont has
+  ## most of Unicode's alphabets and symbols between them), in the middle of
+  ## its cell; else from the system's fonts.
+  let s = $ch
+  var st2 = st
+  for serif in [false, true]:
+    st2.mono = false
+    st2.serif = serif
+    if hasGlyphs(s, faceOf(st2)):
+      let tw = textWidth(s, st2)
+      pushClip(rect(x, y, w, h))
+      text(x + (w - tw) div 2, y, s, fg, st2)
+      popClip()
+      return
+  text(x, y, s, fg, st)
+
 proc drawScreen(r: Rect; focused: bool) =
   fill(r, defaultBg())
   for row in 0 ..< scr.rows:
@@ -411,7 +439,7 @@ proc drawScreen(r: Rect; focused: bool) =
            ((aReverse in c.attrs) xor selected(abs, x1)) != rev0:
           break
         let cp = int(c.ch)
-        if (cp >= 0x2500 and cp <= 0x259F) or charWidth(c.ch) == 2 or c.wide2:
+        if (cp >= 0x2500 and cp <= 0x259F) or charWidth(c.ch) == 2 or c.wide2 or missing(c.ch):
           if x1 == x: special = true; inc x1
           break
         run.add(if cp == 0: " " else: $c.ch)
@@ -426,11 +454,15 @@ proc drawScreen(r: Rect; focused: bool) =
         elif cp >= 0x2500 and cp <= 0x259F:
           if not boxChar(c.ch, px0, y, px1 - px0, chH, fg):
             text(px0, y, $c.ch, fg, st)
-        else:
+        elif charWidth(c.ch) == 2:
           # (a wide character: its two places)
           let pxw = area.x + int(round(float(x + 2) * cw))
           if bg != defaultBg(): fill(px1, y, pxw - px1, chH, bg)
-          text(px0, y, $c.ch, fg, st)
+          fallbackText(c.ch, px0, y, pxw - px0, chH, fg, st)
+        elif aHidden notin c.attrs:
+          var s2 = st
+          s2.bold = boldLetters or aBold in c.attrs
+          fallbackText(c.ch, px0, y, px1 - px0, chH, fg, s2)
       elif aHidden notin c0.attrs:
         let trimmed = run.strip(leading = false, chars = {' '})
         if trimmed.len > 0:
@@ -660,6 +692,7 @@ proc runTerminal*(args: seq[string]) =
   try: scrollLines = clamp(parseInt(s.getOrDefault("scrollback", "3000")), 100, 100_000) except ValueError: discard
   applyDesktopLook()
   openApp("Terminal", scaled(680), scaled(460), frame = wfSystem, userFrame = false, id = "terminal")
+  showArt("terminal")
   followLook()
   initLock(inLock)
   let d = Display(x11Display())

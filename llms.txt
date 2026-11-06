@@ -9,7 +9,11 @@ manager, the desktop's background, minimized windows as icons, its menu);
 with an argument one of its programs: `progman` (Program Manager),
 `control` (Control Panel), `tasklist` (Task List), `terminal` (Terminal;
 `-e command` runs a command), `browser` (Retro Browser: Firefox with a 3.1
-userChrome.css on its own profile), `clock`, `calc`, `calendar`, `cardfile`.
+userChrome.css on its own profile), `setup` (Setup: Termux programs to
+install or remove, apt-get underneath), `write` (Write), `clipboard`
+(Clipboard Viewer), `open FILE` (a file or link in its program), `mines`,
+`solitaire`, `reversi`, `run`, `about`, `exit`, `welcome`, `saver`, `clock`,
+`calc`, `calendar`, `cardfile`.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
@@ -42,6 +46,12 @@ userChrome.css on its own profile), `clock`, `calc`, `calendar`, `cardfile`.
 - Menus over the windows (the desktop's, the icons', the control menu) are
   `wm.showMenu(items, x, y)`: an override-redirect window with the pointer
   and the keyboard grabbed; letters, arrows, Enter, Esc.
+- Alt+Tab shows a box while Alt is held (the keyboard grabbed to it; Alt's
+  release chooses); frames snap to edges while moved; the programs open
+  (their command lines from /proc, their windows' places) are kept in
+  "retrodesktop-session" and opened again at the next start.
+- The screen saver starts from the desktop when XScreenSaverQueryInfo
+  (libXss) says the screen was idle for the delay.
 - Sizes in the window manager are the screen's own pixels: `devScale()` =
   the kit's `dpf(1)` times its pixel zoom `pxScale`.
 

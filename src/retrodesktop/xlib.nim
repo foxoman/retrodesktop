@@ -209,6 +209,7 @@ const
   ClientMessage* = 33.cint
 
   KeyPressMask* = 1.clong
+  KeyReleaseMask* = 2.clong
   ButtonPressMask* = 4.clong
   ButtonReleaseMask* = 8.clong
   EnterWindowMask* = 16.clong
@@ -243,6 +244,7 @@ const
   XA_WINDOW* = 33.Atom
   XA_WM_NAME* = 39.Atom
   XA_WM_NORMAL_HINTS* = 40.Atom
+  XA_WM_CLASS* = 67.Atom
   XA_WM_TRANSIENT_FOR* = 68.Atom
   ZPixmap* = 2.cint
   CWOverrideRedirect* = culong(1 shl 9)
@@ -258,6 +260,9 @@ const
   PMinSize* = 16.clong
   PMaxSize* = 32.clong
   XK_Tab* = 0xff09.culong
+  XK_Alt_L* = 0xffe9.culong
+  XK_Alt_R* = 0xffea.culong
+  XK_Meta_L* = 0xffe7.culong
   XK_Return* = 0xff0d.culong
   XK_Up* = 0xff52.culong
   XK_Down* = 0xff54.culong
@@ -303,6 +308,7 @@ proc XChangeProperty*(d: Display; w: Window; prop, kind: Atom; format, mode: cin
 proc XDeleteProperty*(d: Display; w: Window; prop: Atom): cint
 proc XFree*(p: pointer): cint
 proc XGetWMNormalHints*(d: Display; w: Window; hints: ptr XSizeHints; supplied: ptr clong): cint
+proc XSetWMNormalHints*(d: Display; w: Window; hints: ptr XSizeHints)
 proc XGrabPointer*(d: Display; w: Window; ownerEvents: XBool; mask: cuint; pointerMode, keyboardMode: cint;
                    confineTo: Window; cursor: culong; time: Time): cint
 proc XUngrabPointer*(d: Display; time: Time): cint
@@ -314,6 +320,7 @@ proc XGrabKey*(d: Display; keycode: cint; modifiers: cuint; w: Window; ownerEven
                pointerMode, keyboardMode: cint): cint
 proc XKeysymToKeycode*(d: Display; keysym: culong): uint8
 proc XLookupKeysym*(e: ptr XKeyEvent; index: cint): culong
+proc XQueryKeymap*(d: Display; keys: ptr array[32, char]): cint
 proc XQueryPointer*(d: Display; w: Window; root, child: ptr Window; rx, ry, wx, wy: ptr cint;
                     mask: ptr cuint): XBool
 proc XSync*(d: Display; discard_events: XBool): cint

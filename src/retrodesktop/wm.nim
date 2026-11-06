@@ -12,6 +12,7 @@
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
 import std/[math, tables, algorithm, strutils]
+from std/times import epochTime
 import retroui
 import retroui/canvas2d
 import retroui/uirelays/drivers/x11_driver
@@ -39,6 +40,8 @@ type
     icon*: Bitmap              ## its icon (_NET_WM_ICON), nil when it has none
     iconRead: bool
     pressed: Part
+    class*: string             ## its WM_CLASS class ("Firefox", "Gimp")
+    pid*: int                  ## its process (_NET_WM_PID), 0 when not said
 
   DragKind = enum dkNone, dkMove, dkResize, dkButton
 
@@ -71,6 +74,11 @@ var
   cascadeAt = 0
   menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int;
               fromX, fromY: int; armed: bool]
+  switchWin: Window              # Alt+Tab's box (None: not shown)
+  switchTo: Client
+  pending*: seq[tuple[class, title: string; x, y, w, h: int; maximized, iconic: bool; until: float]]
+    ## where the programs the desktop opened again had their windows (by
+    ## their class): the first window of each goes there
   aWmState, aWmProtocols, aWmDelete, aWmTakeFocus, aWmChangeState, aNetWmName, aUtf8,
     aNetActive, aNetClose, aNetState, aNetFullscreen, aNetMaxH, aNetMaxV, aNetHidden,
     aNetClientList, aNetType, aTypeDesktop, aTypeDock, aTypeDialog, aTypeSplash,
@@ -264,6 +272,12 @@ proc readTitle(c: Client) =
   var t = propText(dpy, c.win, aNetWmName)
   if t.len == 0: t = propText(dpy, c.win, XA_WM_NAME)
   c.title = if t.len > 0: t else: "Untitled"
+
+proc readClass(c: Client) =
+  let wc = propText(dpy, c.win, XA_WM_CLASS).split('\0')
+  c.class = if wc.len >= 2: wc[1] elif wc.len == 1: wc[0] else: ""
+  let p = propLongs(dpy, c.win, XInternAtom(dpy, "_NET_WM_PID", 0), XA_CARDINAL)
+  c.pid = if p.len > 0: int(p[0]) else: 0
 
 proc readProtocols(c: Client) =
   let p = propLongs(dpy, c.win, aWmProtocols, XA_ATOM)
@@ -575,11 +589,13 @@ var
   cycleAt: int
   cycleTime: Time
 
-proc cycle*(back = false; time: Time = CurrentTime) =
-  ## Alt+Tab: the window behind to the front; pressed again soon after, the
-  ## one behind that, and so on through all of them (Alt+Shift+Tab: back).
+proc cycleStep(back: bool; time: Time): Client =
+  ## The window Alt+Tab goes to: the one behind; pressed again soon after
+  ## (or while Alt is held), the one behind that, and so on through all of
+  ## them (Alt+Shift+Tab: back).
   var fresh = time == CurrentTime or time < cycleTime or time - cycleTime > 1500 or
               cycleList.len == 0
+  if switchWin != None: fresh = false
   for c in cycleList:
     if c notin clients: fresh = true
   if fresh:
@@ -588,10 +604,164 @@ proc cycle*(back = false; time: Time = CurrentTime) =
       if clients[i].transient == None: cycleList.add clients[i]
     cycleAt = 0
   cycleTime = time
-  if cycleList.len < 2: return
+  if cycleList.len < 2: return nil
   cycleAt = (cycleAt + (if back: -1 else: 1) + cycleList.len) mod cycleList.len
-  let c = cycleList[cycleAt]
+  cycleList[cycleAt]
+
+proc goTo(c: Client) =
+  if c == nil or c notin clients: return
   if c.iconic: restore(c) else: focus(c)
+
+proc cycle*(back = false; time: Time = CurrentTime) =
+  ## Alt+Tab without its box: the next window to the front at once.
+  goTo(cycleStep(back, time))
+
+# ---- Alt+Tab's box ----------------------------------------------------------------------------------
+
+proc altHeld(): bool =
+  ## Alt is down on the keyboard now.
+  var keys: array[32, char]
+  discard XQueryKeymap(dpy, addr keys)
+  for sym in [XK_Alt_L, XK_Alt_R, XK_Meta_L]:
+    let k = int(XKeysymToKeycode(dpy, sym))
+    if k > 0 and (ord(keys[k div 8]) and (1 shl (k mod 8))) != 0: return true
+  false
+
+proc drawSwitch() =
+  ## 3.1's Alt+Tab: a box in the middle of the screen with the icon and the
+  ## title of the window that comes when Alt is let go.
+  if switchWin == None or switchTo == nil: return
+  var a: XWindowAttributes
+  if XGetWindowAttributes(dpy, switchWin, addr a) == 0: return
+  let w = int(a.width)
+  let h = int(a.height)
+  let t = ui.theme
+  let cv = newCanvas2D(w, h)
+  cv.fillStyle = t.frame
+  cv.fillRect(0, 0, float(w), float(h))
+  cv.fillStyle = t.face
+  cv.fillRect(2, 2, float(w - 4), float(h - 4))
+  cv.fillStyle = t.light
+  cv.fillRect(2, 2, float(w - 4), 1)
+  cv.fillRect(2, 2, 1, float(h - 4))
+  cv.fillStyle = t.shadow
+  cv.fillRect(2, float(h - 3), float(w - 4), 1)
+  cv.fillRect(float(w - 3), 2, 1, float(h - 4))
+  let isz = dpx(32)
+  let pad = dpx(12)
+  let ic = switchTo.readIcon(isz)
+  if ic != nil: cv.drawImage(ic, float(pad), float((h - isz) div 2), float(isz), float(isz))
+  else:
+    # (no icon of its own: a little window)
+    let x0 = float(pad)
+    let y0 = float((h - isz) div 2)
+    cv.fillStyle = t.frame
+    cv.fillRect(x0, y0 + 2, float(isz), float(isz - 4))
+    cv.fillStyle = t.window
+    cv.fillRect(x0 + 1, y0 + 3, float(isz - 2), float(isz - 6))
+    cv.fillStyle = t.select
+    cv.fillRect(x0 + 1, y0 + 3, float(isz - 2), float(isz) * 0.2)
+  let px = max(10, dpx(13))
+  cv.font = "bold " & $px & "px sans-serif"
+  cv.fillStyle = t.text
+  cv.textBaseline = "middle"
+  cv.textAlign = "left"
+  var title = switchTo.title
+  let room = float(w - isz - 3 * pad)
+  while title.len > 3 and cv.measureText(title).width > room:
+    title = title[0 ..< title.len - 4] & "..."
+  cv.fillText(title, float(isz + 2 * pad), float(h) / 2)
+  putBitmap(switchWin, cv.toBitmap, 0, 0)
+
+proc closeSwitch() =
+  if switchWin != None:
+    discard XUngrabKeyboard(dpy, CurrentTime)
+    discard XDestroyWindow(dpy, switchWin)
+    switchWin = None
+
+proc switchKey(back: bool; time: Time) =
+  ## Alt+Tab pressed: the box shown (or its next window) while Alt is held;
+  ## without Alt held (a keyboard bar's Alt, let go at once) straight there.
+  let c = cycleStep(back, time)
+  if c == nil:
+    closeSwitch()
+    return
+  switchTo = c
+  if switchWin == None:
+    if not altHeld():
+      goTo(c)
+      return
+    let (sw, sh) = screenSize()
+    let w = min(sw - dpx(20), dpx(400))
+    let h = dpx(64)
+    switchWin = XCreateSimpleWindow(dpy, root, cint((sw - w) div 2), cint((sh - h) div 2),
+                                    cuint(w), cuint(h), 0, 0, xcolor(ui.theme.face))
+    var attrs: XSetWindowAttributes
+    attrs.overrideRedirect = 1
+    discard XChangeWindowAttributes(dpy, switchWin, CWOverrideRedirect, addr attrs)
+    discard XSelectInput(dpy, switchWin, ExposureMask or KeyPressMask or KeyReleaseMask)
+    discard XMapWindow(dpy, switchWin)
+    discard XRaiseWindow(dpy, switchWin)
+    let grabbed = XGrabKeyboard(dpy, switchWin, 0, GrabModeAsync, GrabModeAsync, CurrentTime) == 0
+    # (Alt let go before the keyboard was ours, or the keyboard is another
+    # program's: no release will come)
+    if not grabbed or not altHeld():
+      closeSwitch()
+      goTo(c)
+      return
+  drawSwitch()
+
+proc switchKeyEvent(e: XKeyEvent; press: bool) =
+  var ek = e
+  let sym = XLookupKeysym(addr ek, 0)
+  if press:
+    if sym == XK_Tab: switchKey((e.state and ShiftMask) != 0, e.time)
+    elif sym == XK_Escape: closeSwitch()
+  elif sym in [XK_Alt_L, XK_Alt_R, XK_Meta_L]:
+    let c = switchTo
+    closeSwitch()
+    goTo(c)
+
+# ---- snapping ---------------------------------------------------------------------------------------
+
+proc snapped(c: Client; x, y: int): (int, int) =
+  ## A frame moved near an edge of the screen or of another window: against
+  ## it (side by side, or lined up), as a finger cannot place it to the pixel.
+  let near = dpx(if bigFrames: 16 else: 10)
+  let (sw, sh) = screenSize()
+  let fw = c.frameW
+  let fh = c.frameH
+  var bx = x
+  var by = y
+  var dx = near + 1
+  var dy = near + 1
+  template tryX(edge, target: int) =
+    if abs(target - edge) < dx:
+      dx = abs(target - edge)
+      bx = x + target - edge
+  template tryY(edge, target: int) =
+    if abs(target - edge) < dy:
+      dy = abs(target - edge)
+      by = y + target - edge
+  tryX(x, 0)
+  tryX(x + fw, sw)
+  tryY(y, 0)
+  tryY(y + fh, sh)
+  for o in clients:
+    if o == c or o.iconic or o.fullscreen or o.maximized: continue
+    let ow = o.frameW
+    let oh = o.frameH
+    if y < o.y + oh + near and y + fh > o.y - near:
+      tryX(x, o.x + ow)
+      tryX(x + fw, o.x)
+      tryX(x, o.x)
+      tryX(x + fw, o.x + ow)
+    if x < o.x + ow + near and x + fw > o.x - near:
+      tryY(y, o.y + oh)
+      tryY(y + fh, o.y)
+      tryY(y, o.y)
+      tryY(y + fh, o.y + oh)
+  (bx, by)
 
 # ---- the control menu -------------------------------------------------------------------------------
 
@@ -777,12 +947,39 @@ proc manage(w: Window; adopt: bool) =
     return
   let c = Client(win: w, w: max(1, int(a.width)), h: max(1, int(a.height)))
   readTitle(c)
+  readClass(c)
   readProtocols(c)
   readHints(c)
   if clong(aTypeSplash) in types: c.fixed = true
   c.dialog = clong(aTypeDialog) in types
   c.w = max(c.w, 1)
   place(c, int(a.x), int(a.y), adopt)
+  # (a program the desktop opened again: its window where it was)
+  var again = -1
+  if not adopt and c.class.len > 0 and c.transient == None:
+    let now = epochTime()
+    # (the desktop's own programs share one class: theirs by the title too)
+    for i, p in pending:
+      if p.class == c.class and p.until > now and p.title == c.title:
+        again = i
+        break
+    if again < 0 and c.class != "Retro-desktop":
+      for i, p in pending:
+        if p.class == c.class and p.until > now:
+          again = i
+          break
+  var wasMax, wasIcon = false
+  if again >= 0:
+    let p = pending[again]
+    pending.delete(again)
+    if not c.fixed:
+      c.w = max(c.minW, p.w)
+      c.h = max(c.minH, p.h)
+    c.x = p.x
+    c.y = p.y
+    fitOnScreen(c)
+    wasMax = p.maximized
+    wasIcon = p.iconic
   c.frame = XCreateSimpleWindow(dpy, root, cint(c.x), cint(c.y), cuint(c.frameW), cuint(c.frameH),
                                 0, 0, xcolor(ui.theme.face))
   discard XSelectInput(dpy, c.frame, SubstructureRedirectMask or SubstructureNotifyMask or
@@ -801,11 +998,16 @@ proc manage(w: Window; adopt: bool) =
   applyGeometry(c)
   let st = propLongs(dpy, w, aNetState, XA_ATOM)
   if clong(aNetFullscreen) in st: setFullscreen(c, true)
+  elif again >= 0:
+    if wasMax and c.hasButtons:
+      focus(c)
+      maximize(c)
   elif (maximizeNew and c.hasButtons and not adopt) or
        (clong(aNetMaxH) in st and clong(aNetMaxV) in st and c.hasButtons):
     focus(c)
     maximize(c)
   focus(c)
+  if wasIcon and c.hasButtons: minimize(c)
   updateClientList()
   changedNow()
 
@@ -929,8 +1131,9 @@ proc moveDrag(rx, ry: int) =
   of dkMove:
     if c.maximized or c.fullscreen: return
     let (sw, sh) = screenSize()
-    c.x = clamp(drag.x + dx, -(c.frameW - dpx(40)), sw - dpx(40))
-    c.y = clamp(drag.y + dy, 0, max(0, sh - topOf()))
+    let (sx, sy) = snapped(c, drag.x + dx, drag.y + dy)
+    c.x = clamp(sx, -(c.frameW - dpx(40)), sw - dpx(40))
+    c.y = clamp(sy, 0, max(0, sh - topOf()))
     discard XMoveWindow(dpy, c.frame, cint(c.x), cint(c.y))
   of dkResize:
     var x = drag.x
@@ -991,7 +1194,7 @@ proc onKey(e: XKeyEvent) =
   let f4 = cuint(XKeysymToKeycode(dpy, XK_F4))
   let esc = cuint(XKeysymToKeycode(dpy, XK_Escape))
   let mods = e.state and (ShiftMask or ControlMask or Mod1Mask)
-  if e.keycode == tab and (mods and Mod1Mask) != 0: cycle((mods and ShiftMask) != 0, e.time)
+  if e.keycode == tab and (mods and Mod1Mask) != 0: switchKey((mods and ShiftMask) != 0, e.time)
   elif e.keycode == f4 and mods == Mod1Mask: close(active)
   elif e.keycode == esc and mods == ControlMask:
     if taskList != nil: taskList()
@@ -1120,6 +1323,21 @@ proc handle(p: pointer): bool {.nimcall.} =
       if c.iconic: changedNow()
     elif a == aWmProtocols or a == aWmHints:
       readProtocols(c)
+    elif a == aNetType or a == XA_WM_NORMAL_HINTS:
+      # (a program that says what its window is only once it is shown -- a
+      # dialog, a size it keeps: its frame changes, a dialog to the middle)
+      let wasDialog = c.dialog
+      let wasFixed = c.fixed
+      readHints(c)
+      c.dialog = clong(aTypeDialog) in propLongs(dpy, c.win, aNetType, XA_ATOM)
+      if c.fixed and not wasFixed and c.maximized: restore(c)   # (a phone's: its own size)
+      if c.dialog and not wasDialog and not c.iconic and c.transient == None:
+        if c.maximized: restore(c)
+        let (sw, sh) = screenSize()
+        c.x = max(0, (sw - c.frameW) div 2)
+        c.y = max(0, (sh - c.frameH) div 3)
+        applyGeometry(c)
+      if c.dialog != wasDialog or c.fixed != wasFixed: drawFrame(c)
     elif a == aNetIcon:
       c.iconRead = false
       c.icon = nil
@@ -1129,8 +1347,16 @@ proc handle(p: pointer): bool {.nimcall.} =
     if e.xclient.window == desk: return false
     onClientMessage(e.xclient)
     return true
+  of KeyRelease:
+    if switchWin != None and e.xkey.window == switchWin:
+      switchKeyEvent(e.xkey, false)
+      return true
+    return e.xkey.window != desk
   of Expose:
     let w = e.xexpose.window
+    if w == switchWin and switchWin != None:
+      if e.xexpose.count == 0: drawSwitch()
+      return true
     if w == menuWin and menuWin != None:
       if e.xexpose.count == 0: drawMenu()
       return true
@@ -1205,6 +1431,9 @@ proc handle(p: pointer): bool {.nimcall.} =
   of KeyPress:
     if menuWin != None and e.xkey.window == menuWin:
       menuKey(e.xkey)
+      return true
+    if switchWin != None and e.xkey.window == switchWin:
+      switchKeyEvent(e.xkey, true)
       return true
     if e.xkey.window == root:
       onKey(e.xkey)
@@ -1323,6 +1552,16 @@ proc stop*() =
   x11EventHook = nil
   running = false
   discard XSync(dpy, 0)
+
+proc sessionWindows*(): seq[Client] =
+  ## The programs' windows, bottom to top, for the desktop to keep (which
+  ## programs were open, where): not the dialogs.
+  for c in clients:
+    if c.transient == None and not c.dialog and c.pid > 0: result.add c
+
+proc savedGeometry*(c: Client): tuple[x, y, w, h: int] =
+  ## Where `c` is, or was before it was maximized.
+  if c.maximized: c.saved else: (c.x, c.y, c.w, c.h)
 
 proc closeAll*() =
   ## Asks every program to close its windows (Exit Retro Desktop).

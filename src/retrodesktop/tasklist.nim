@@ -35,6 +35,7 @@ proc refresh() =
 proc runTaskList*() =
   applyDesktopLook()
   openApp("Task List", scaled(420), scaled(300), frame = wfSystem, userFrame = false, id = "tasklist")
+  showArt("tasklist")
   followLook()
   var cols = @[column("Program", 260), column("Memory", 90, alRight)]
   var lastRefresh = -10_000

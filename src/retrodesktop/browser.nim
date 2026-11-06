@@ -189,13 +189,17 @@ proc runBrowser*(args: seq[string]) =
     openApp("Retro Browser", scaled(420), scaled(160), frame = wfSystem, userFrame = false,
             id = "browser")
     var show = true
+    var install = false
     while beginFrame():
-      if msgBox(show, "Retro Browser", "Retro Browser is Firefox in the desktop's look, and " &
-                "Firefox is not installed. In Termux: pkg install firefox (from x11-repo); " &
-                "on Linux, your system's Firefox.", ["OK"], miInfo) != 0 or not show:
-        quitApp()
+      let r = msgBox(show, "Retro Browser", "Retro Browser is Firefox in the desktop's look, and " &
+                     "Firefox is not installed yet. Setup can install it now (about 300 MB with " &
+                     "what it needs), then start Retro Browser.", ["&Install Firefox", "Cancel"],
+                     miQuestion)
+      if r == 1: install = true
+      if r != 0 or not show: quitApp()
       endFrame()
     closeApp()
+    if install: launch(selfCommand("setup") & " --then browser firefox")
     return
   try: writeProfile()
   except CatchableError: discard

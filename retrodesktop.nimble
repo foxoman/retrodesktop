@@ -1,7 +1,7 @@
 # Retro Desktop -- a Windows 3.1 style desktop for Linux and Termux (Android)
 # Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-version       = "0.1.4"
+version       = "0.1.5"
 author        = "Sultan Al Isaiee (@foxoman)"
 description   = "A Windows 3.1 style desktop and window manager for Linux and Termux:X11"
 license       = "MIT"

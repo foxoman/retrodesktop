@@ -4,13 +4,13 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils, tables, algorithm, math, times]
+import std/[os, strutils, tables, algorithm, math, times, hashes]
 import retroui
 import retroui/[svgimport, imaging]
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.4"
+  DesktopVersion* = "0.1.5"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -231,17 +231,63 @@ proc findIconFile*(name: string): string =
     if fileExists(xpm): return ""
   ""
 
+proc iconCacheDir(): string =
+  let x = getEnv("XDG_CACHE_HOME")
+  (if x.len > 0: x else: getHomeDir() / ".cache") / SettingsName / "icons"
+
+proc cachedIcon(path: string; size: int): Bitmap =
+  ## The icon at `path` as drawn before at `size` (its pixels kept in the
+  ## cache folder: no PNG to decode, no SVG to draw again); nil when there
+  ## is none, or the icon changed since.
+  try:
+    let stamp = $getLastModificationTime(path).toUnix
+    let f = iconCacheDir() / $hash(path & "@" & $size) & ".px"
+    if not fileExists(f): return nil
+    let data = readFile(f)
+    let head = stamp & "\n" & path & "\n"
+    let n = size * size
+    if not data.startsWith(head) or data.len != head.len + n * 4: return nil
+    result = Bitmap(w: size, h: size, px: newSeq[uint32](n))
+    copyMem(addr result.px[0], unsafeAddr data[head.len], n * 4)
+  except CatchableError: result = nil
+
+proc keepIcon(path: string; size: int; b: Bitmap) =
+  if b == nil or b.w != size or b.h != size or b.px.len != size * size: return
+  try:
+    createDir(iconCacheDir())
+    let head = $getLastModificationTime(path).toUnix & "\n" & path & "\n"
+    var data = newString(head.len + b.px.len * 4)
+    copyMem(addr data[0], unsafeAddr head[0], head.len)
+    copyMem(addr data[head.len], unsafeAddr b.px[0], b.px.len * 4)
+    writeFile(iconCacheDir() / $hash(path & "@" & $size) & ".px", data)
+  except CatchableError: discard
+
 proc loadIcon*(name: string; size: int): Bitmap =
   ## The icon `name` (a theme's or a file) at `size` pixels, nil when there is
-  ## none that can be read. SVG icons are drawn at that size.
+  ## none that can be read. SVG icons are drawn at that size. What was drawn
+  ## once is kept (~/.cache/retrodesktop/icons): Program Manager opens quicker
+  ## the next time.
   let f = findIconFile(name)
   if f.len == 0: return nil
+  result = cachedIcon(f, size)
+  if result != nil: return
   try:
     if f.toLowerAscii.endsWith(".svg"):
       result = rasterizeSvg(readFile(f), size, size)
     else:
       result = loadPicture(f, size, size)
   except CatchableError, Defect: result = nil
+  if result != nil and (result.w != size or result.h != size):
+    # (a picture not square: in the middle of a square, so it can be kept)
+    let sq = Bitmap(w: size, h: size, px: newSeq[uint32](size * size))
+    let ox = (size - result.w) div 2
+    let oy = (size - result.h) div 2
+    for y in 0 ..< min(result.h, size):
+      for x in 0 ..< min(result.w, size):
+        if ox + x >= 0 and oy + y >= 0 and ox + x < size and oy + y < size:
+          sq.px[(oy + y) * size + ox + x] = result.px[y * result.w + x]
+    result = sq
+  keepIcon(f, size, result)
 
 # ---- Program Manager's own items --------------------------------------------------------------------
 

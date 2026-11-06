@@ -9,7 +9,7 @@
 
 import std/[os, strutils, tables, math]
 import retroui
-import common, link, art, browser
+import common, link, art
 
 type
   Item = object
@@ -47,7 +47,7 @@ Every program opens in its own window on the desktop.
 
 | Keys | What they do |
 |---|---|
-| Alt+Tab | the next window (again and again: the ones behind it) |
+| Alt+Tab | holding Alt: a box with the next window; Tab again for the one behind; let go of Alt to go there |
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes the window in front |
 | Ctrl+Esc | the Task List: every window, how much memory each takes |
@@ -60,6 +60,13 @@ desktop entry (most programs with windows) come in the groups by their kind;
 **File > New** adds one of your own, with its command line, to any group.
 Programs in **StartUp** start with the desktop. **Options > Refresh** (F5)
 looks for programs installed since.
+
+**Setup** (in Main) installs more: browsers, office, development, graphics,
+music and video, games, fonts. Check what you want, clear what you want gone;
+Termux's packages do the work underneath (pkg). The programs open when the
+desktop ended open again when it starts (Control Panel > Desktop to stop it).
+
+The **Games** group has Minesweeper, Solitaire and Reversi.
 
 ## Termux on Android
 
@@ -74,12 +81,11 @@ var
   icons: Table[string, Bitmap]
   minimizeOnUse = false
   saveOnExit = true
-  showNew, showProps, showRun, showAbout, showHelp, showDelete: bool
+  showNew, showProps, showAbout, showHelp, showDelete: bool
   newName, newCommand, newIcon: string
   newGroup = 0
   propsGroup: Group
   propsIndex = -1
-  runText = ""
   lastGroup: Group
 
 # ---- the items ----------------------------------------------------------------------------------------
@@ -146,21 +152,29 @@ proc loadGroups() =
                    "The windows open, and the memory each takes")
   main.add builtin("Terminal", selfCommand("terminal"), "terminal",
                    "The shell's command line, in a PC's 16 text colors")
-  if firefoxPath().len > 0:
-    main.add builtin("Web Browser", selfCommand("browser"), "browser",
-                     "Retro Browser: Firefox in the desktop's look, on a profile of its own")
+  # (Retro Browser asks to install Firefox when it is not there)
+  main.add builtin("Web Browser", selfCommand("browser"), "browser",
+                   "Retro Browser: Firefox in the desktop's look, on a profile of its own")
+  main.add builtin("Setup", selfCommand("setup"), "setup",
+                   "Programs to install, from Termux's packages: browsers, office, games...")
   main.add builtin("Read Me", "?help", "readme", "How the desktop works")
   companionItem("Notepad", "retro-notepad", "notepad", "Text files", acc)
   companionItem("Paintbrush", "retro-photo", "paint", "Retro Photo: pictures and painting", acc)
   companionItem("Board", "retro-board", "board", "Retro Board: a whiteboard for drawings and notes", acc)
   companionItem("Mail", "retro-mail", "mail", "Retro Mail", acc)
   companionItem("Gallery", "retro-gallery", "gallery", "Retro Gallery: every control of Retro Nim UI", acc)
+  acc.add builtin("Write", selfCommand("write"), "write", "Documents with bold, italic, sizes and lists")
+  acc.add builtin("Clipboard Viewer", selfCommand("clipboard"), "clipboard", "What was copied last")
   acc.add builtin("Calculator", selfCommand("calc"), "calc", "A calculator")
   acc.add builtin("Calendar", selfCommand("calendar"), "calendar", "Days, with notes and appointments")
   acc.add builtin("Cardfile", selfCommand("cardfile"), "cardfile", "Cards of names, numbers and notes")
   acc.add builtin("Clock", selfCommand("clock"), "clock", "The time, on a face or in numbers")
   groupNamed("Main").items = main
   groupNamed("Accessories").items = acc
+  groupNamed("Games").items = @[
+    builtin("Minesweeper", selfCommand("mines"), "mines", "Find the mines without stepping on one"),
+    builtin("Solitaire", selfCommand("solitaire"), "cards", "Klondike, as 3.1 had it"),
+    builtin("Reversi", selfCommand("reversi"), "reversi", "Turn the computer's pieces over")]
   for e in installedApps():
     groupNamed(groupOf(e)).items.add Item(name: e.name, command: e.command, comment: e.comment,
                                           icon: e.icon, terminal: e.terminal, custom: -1)
@@ -257,9 +271,7 @@ proc menus() =
         propsIndex = g.sel
         showProps = true
       menuSeparator()
-      if menuItem("&Run..."):
-        showRun = true
-        focusFirstText(inDialog = true)
+      if menuItem("&Run..."): launch(selfCommand("run"))
       menuSeparator()
       if menuItem("E&xit Retro Desktop..."): retroCommand(RetroAskExit)
     menu "&Options":
@@ -350,9 +362,6 @@ proc dialogs() =
         saveProgItems(items)
         loadGroups()
     else: showDelete = false
-  if showRun:
-    if inputBox(showRun, "Run", "Command Line:", runText, width = 420) == 1:
-      if runText.strip.len > 0: launch(runText)
   if showHelp:
     dialog(showHelp, "Read Me", 560):
       markdownView(HelpText, height = dp(360))
@@ -366,6 +375,7 @@ proc runProgman*() =
   ## Program Manager, until it is closed.
   applyDesktopLook()
   openApp("Program Manager", scaled(720), scaled(480), frame = wfSystem, userFrame = false, id = "progman")
+  showArt("progman")
   followLook(proc () = icons.clear())
   loadGroups()
   onMemoryPressure(proc (level: MemoryPressure) =

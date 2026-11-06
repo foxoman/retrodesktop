@@ -8,7 +8,7 @@
 
 import retroui
 import retroui/uirelays/drivers/x11_driver
-import xlib, common
+import xlib, common, art
 
 const
   RetroCascade* = 1
@@ -110,6 +110,70 @@ proc minimizeSelf*() =
   if d == nil: return
   sendToRoot(atom(d, "WM_CHANGE_STATE"), Window(x11Window()), 3, 0, 0)
 
+proc maximizeSelf*() =
+  ## Asks for this program's window to fill the screen (_NET_WM_STATE).
+  let d = display()
+  if d == nil: return
+  sendToRoot(atom(d, "_NET_WM_STATE"), Window(x11Window()), 1,
+             clong(atom(d, "_NET_WM_STATE_MAXIMIZED_HORZ")), clong(atom(d, "_NET_WM_STATE_MAXIMIZED_VERT")))
+
+proc resizeSelf*(w, h: int) =
+  ## This program's window made `w` x `h` design pixels big (as `openApp`
+  ## takes them), as far as the window manager lets it.
+  let d = display()
+  if d == nil: return
+  let k = devScale()
+  discard XResizeWindow(d, Window(x11Window()), cuint(max(1, int(float(w) * k))),
+                        cuint(max(1, int(float(h) * k))))
+  discard XFlush(d)
+
+proc fullscreenSelf*() =
+  ## Asks for this program's window to cover the whole screen (a screen saver).
+  let d = display()
+  if d == nil: return
+  sendToRoot(atom(d, "_NET_WM_STATE"), Window(x11Window()), 1,
+             clong(atom(d, "_NET_WM_STATE_FULLSCREEN")), 0)
+
+proc asDialog*() =
+  ## This program's window is a dialog: no sizing, no minimize or maximize
+  ## button, in the middle of the screen (the desktop's Run, About, Exit).
+  let d = display()
+  if d == nil: return
+  let w = Window(x11Window())
+  var a: XWindowAttributes
+  if XGetWindowAttributes(d, w, addr a) == 0: return
+  var h: XSizeHints
+  h.flags = PMinSize or PMaxSize
+  h.minWidth = a.width
+  h.maxWidth = a.width
+  h.minHeight = a.height
+  h.maxHeight = a.height
+  XSetWMNormalHints(d, w, addr h)
+  setLongs(d, w, atom(d, "_NET_WM_WINDOW_TYPE"), XA_ATOM,
+           [clong(atom(d, "_NET_WM_WINDOW_TYPE_DIALOG"))])
+  # (in the middle: the window manager may have placed it before it knew)
+  let s = XDefaultScreen(d)
+  discard XMoveWindow(d, w, max(0, (XDisplayWidth(d, s) - a.width) div 2),
+                      max(0, (XDisplayHeight(d, s) - a.height) div 3))
+  discard XFlush(d)
+
+proc showArt*(kind: string) =
+  ## The desktop's icon `kind` (art.nim) as this window's own icon
+  ## (_NET_WM_ICON, at 16, 32 and 48 pixels): on the desktop when it is
+  ## minimized, in Alt+Tab's box.
+  let d = display()
+  if d == nil: return
+  var data: seq[clong]
+  for size in [16, 32, 48]:
+    let b = appIcon(kind, size)
+    if b == nil: continue
+    data.add clong(b.w)
+    data.add clong(b.h)
+    for p in b.px: data.add clong(p)
+  if data.len > 0:
+    setLongs(d, Window(x11Window()), atom(d, "_NET_WM_ICON"), XA_CARDINAL, data)
+    discard XFlush(d)
+
 proc findWindow*(title: string): Window =
   ## A managed window called `title` (0 when there is none).
   for w in windows():
@@ -168,8 +232,18 @@ proc announceLook*() =
 # ---- processes ------------------------------------------------------------------------------------
 
 proc processMemory*(pid: int): int64 =
-  ## How much memory process `pid` holds (its resident set, bytes; 0 when
-  ## it cannot be read).
+  ## How much memory process `pid` holds, bytes (0 when it cannot be read):
+  ## its own share (Pss: its own pages, and its part of the pages it shares
+  ## with the desktop's other programs -- the code, the libraries), else
+  ## its resident set.
+  try:
+    for line in lines("/proc/" & $pid & "/smaps_rollup"):
+      if line.len > 4 and line[0 .. 3] == "Pss:":
+        var n: int64 = 0
+        for ch in line:
+          if ch in {'0' .. '9'}: n = n * 10 + int64(ord(ch) - ord('0'))
+        return n * 1024
+  except CatchableError: discard
   try:
     for line in lines("/proc/" & $pid & "/status"):
       if line.len > 6 and line[0 .. 5] == "VmRSS:":

@@ -17,6 +17,7 @@ proc keep(name, key, value: string) =
 
 var
   analog = true
+  h24 = true                     # 24 hours (Control Panel's Date/Time)
   showSeconds = true
   showDate = true
 
@@ -48,7 +49,8 @@ proc drawAnalog(r: Rect; t: DateTime) =
   disc(cx, cy, max(2.0, rad / 18), t2.text)
 
 proc drawDigital(r: Rect; t: DateTime) =
-  let s = if showSeconds: t.format("HH:mm:ss") else: t.format("HH:mm")
+  let s = if showSeconds: t.format(if h24: "HH:mm:ss" else: "h:mm:ss tt")
+          else: t.format(if h24: "HH:mm" else: "h:mm tt")
   let probe = textWidth(s, style(bold = true))
   let k = max(1.0, min(float(r.w) * 0.85 / float(max(1, probe)),
                        float(r.h) * 0.5 / float(max(1, lineHeight()))))
@@ -63,7 +65,9 @@ proc runClock*() =
   showDate = s.getOrDefault("date", "1") == "1"
   applyDesktopLook()
   openApp("Clock", scaled(240), scaled(260), frame = wfSystem, userFrame = false, id = "clock")
-  followLook()
+  showArt("clock")
+  h24 = desktopSettings().setting("clock24", "on") != "off"
+  followLook(proc () = h24 = desktopSettings().setting("clock24", "on") != "off")
   while beginFrame():
     let t = now()
     menubar:
@@ -90,7 +94,7 @@ proc runClock*() =
       text(r.x + (r.w - textWidth(d)) div 2, r.y + r.h - lh - dp(4), d, ui.theme.text)
       face.h -= lh + dp(6)
     if analog: drawAnalog(face, t) else: drawDigital(face, t)
-    setTitle(if r.w < dp(150): t.format("HH:mm") else: "Clock")
+    setTitle(if r.w < dp(150): t.format(if h24: "HH:mm" else: "h:mm tt") else: "Clock")
     # (the next second, or the next minute without the seconds hand)
     let ms = if showSeconds: 1000 - (int(t.nanosecond div 1_000_000) mod 1000)
              else: (60 - t.second) * 1000
@@ -230,6 +234,7 @@ proc calcKeys() =
 proc runCalc*() =
   applyDesktopLook()
   openApp("Calculator", scaled(300), scaled(330), frame = wfSystem, userFrame = false, id = "calc")
+  showArt("calc")
   followLook()
   var showAbout = false
   while beginFrame():
@@ -336,6 +341,7 @@ proc runCalendar*() =
   calDay = today()
   loadDay(calDay)
   openApp("Calendar", scaled(640), scaled(460), frame = wfSystem, userFrame = false, id = "calendar")
+  showArt("calendar")
   followLook()
   while beginFrame():
     menubar:
@@ -420,6 +426,7 @@ proc runCardfile*() =
   loadCards()
   sortCards()
   openApp("Cardfile", scaled(600), scaled(420), frame = wfSystem, userFrame = false, id = "cardfile")
+  showArt("cardfile")
   followLook()
   var titles: seq[string]
   while beginFrame():

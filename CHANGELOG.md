@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.1.5
+
+- **Setup**, as Windows 3.1's: the blue screen, the programs to choose in
+  groups (Internet, Office, Development, Graphics, Multimedia, Games,
+  System, Fonts -- every name checked against Termux's repositories), the
+  space required and available, a gauge while they install, and Termux's
+  apt underneath (its status read as it works; x11-repo added first when a
+  program needs it, the lists read when they are old). Clear a program to
+  remove it. Programs for the Terminal get a Program Manager item.
+  `retro-desktop setup gimp` asks for one at once. On Linux it shows the
+  command to run with the administrator.
+- **Retro Browser installs Firefox** through Setup when Firefox is not
+  there, then starts. Web Browser is always in Main; Setup is there too.
+- **The desktop's Run, About, Exit and Welcome are windows of their own**,
+  over the other windows (the desktop no longer comes over every window
+  while one is open). Run remembers its command lines and can run one in
+  the Terminal.
+- **Alt+Tab as 3.1 had it**: holding Alt, a box with the next window's icon
+  and title; Tab again goes on; letting go of Alt goes there.
+- **Windows snap** to the screen's edges and to the other windows as you
+  move them.
+- **The programs open when the desktop ended open again**, where their
+  windows were (Control Panel > Desktop to stop it): after Exit, or when
+  Android stopped Termux.
+- **Games**: Minesweeper (best times), Solitaire (Klondike, draw one or
+  three, undo, three card backs, the bouncing cards) and Reversi (four
+  levels, hints), for a mouse and a finger.
+- **Write**, a word processor on Retro Nim UI's rich text editor (HTML or
+  plain text); **Clipboard Viewer** (Android's clipboard with Termux:API).
+- **Open**: files and links from the desktop's programs (its own
+  `xdg-open`) go to the program for their kind, or the Open With box.
+- **Control Panel**: Date/Time (12 or 24 hours, the time zone for the
+  desktop's programs) and Screen Saver (Blank Screen, Starfield, Mystify,
+  Marquee, after a delay; it needs libxss, now in the package's Depends).
+- **The Terminal draws letters FreeMono lacks** from FreeSans and FreeSerif
+  (arrows, check marks, stars, music, Greek, Cyrillic...) in their cells.
+- **Faster, truer**: Program Manager keeps the icons it drew; Task List
+  shows each program's own share of memory (Pss), not memory it shares.
+- The desktop's own windows have their icons (minimized, in Alt+Tab).
+- PulseAudio, when installed, is started with the desktop.
 ## 0.1.4
 
 - **Fixed: the desktop's menu opened under the windows.** The desktop is

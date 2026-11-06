@@ -16,16 +16,28 @@ one program of about 5 MB, nothing to set up.
   title bar to move it by, the border and the corners to size it by, the
   control-menu box (Restore, Minimize, Maximize, Close, Switch To), the
   minimize and maximize buttons. Minimized windows are icons along the
-  bottom of the desktop. Click to bring a window to the front, Alt+Tab to
-  go through them, Alt+F4 to close one. Dialogs open over their windows,
-  programs that go full screen (videos, games) get the whole screen, and
-  the windows follow when the tablet turns.
+  bottom of the desktop. Click to bring a window to the front; Alt+Tab
+  shows 3.1's box with the next window while Alt is held; Alt+F4 closes
+  one. Windows snap to the screen's edges and to each other as you move
+  them. Dialogs open over their windows, programs that go full screen
+  (videos, games) get the whole screen, and the windows follow when the
+  tablet turns. The programs open when the desktop ended -- you exited, or
+  Android stopped Termux -- open again where they were the next time.
 - **Program Manager**, with the groups 3.1 had -- Main, Accessories,
   StartUp -- and a group for each kind of program you install: Internet,
   Office, Development, Graphics, Multimedia, System, Games. Every program
   installed with a desktop entry is there by itself (Firefox, VS Code,
   GIMP, LibreOffice...). File > New puts in programs of your own; StartUp
   starts them with the desktop.
+- **Setup**, as 3.1's: the blue screen, the programs to choose (browsers,
+  office, development, graphics, music and video, games, fonts), the space
+  they need and the space there is, a gauge while they go in -- and
+  Termux's packages (apt, as `pkg` runs it) doing the work underneath.
+  Clear a program that is installed to remove it. Retro Browser asks to
+  install Firefox through it when Firefox is not there.
+
+  ![Setup](docs/setup.png)
+
 - **Terminal**, the desktop's own: the shell in a PC's 16 text colors
   (black on white, as Windows had it, or MS-DOS Prompt's gray on black), for everything from
   `ls` to vim, nano, htop and mc -- xterm's escape sequences, 256 and 24-bit
@@ -37,9 +49,22 @@ one program of about 5 MB, nothing to set up.
   square raised buttons, tabs like buttons, a sunken address field, the menu
   bar, the desktop's colors, scroll bars always there -- on a profile of
   its own, so your own Firefox stays as it is (`pkg install firefox`).
-- **The accessories:** Clock, Calculator, Calendar (with appointments and
-  notes), Cardfile, Task List (Ctrl+Esc: every window and the memory its
-  program takes; End Task ends one that hangs), Control Panel.
+- **The accessories:** Write (a word processor: bold, italic, sizes,
+  colors, lists; HTML or plain text), Clock, Calculator, Calendar (with
+  appointments and notes), Cardfile, Clipboard Viewer (and Android's
+  clipboard, with Termux:API), Task List (Ctrl+Esc: every window and the
+  memory its program takes; End Task ends one that hangs), Control Panel
+  (with Date/Time and the screen savers: Blank Screen, Starfield, Mystify,
+  Marquee).
+- **The games:** Minesweeper, Solitaire (Klondike, the bouncing cards
+  when you win) and Reversi, drawn for a mouse and for a finger.
+
+  ![Games](docs/games.png)
+
+- **Opening files and links:** a file opened from File Manager (or a link
+  from any of the desktop's programs) goes to the program for its kind --
+  the one you chose ("Always use this program"), else the one that says it
+  takes it, else the Open With box (in Termux, an Android app too).
 - **From Retro Nim UI's examples:** File Manager (Retro Files), Paintbrush
   (Retro Photo), Board (Retro Board), Notepad.
 - **The same look for the other programs.** GTK programs (and Chromium,
@@ -55,8 +80,11 @@ one program of about 5 MB, nothing to set up.
   its menu; windows that open maximized on a phone's screen; Termux kept
   awake (termux-wake-lock); the memory watched -- when the phone runs
   short the desktop lets its caches go and says so, and Task List shows
-  which program holds what. At rest the desktop takes no CPU and about
-  20 MB; Clock, Calculator and the others about 13 MB each.
+  which program holds what (its own share: what it alone holds, and its
+  part of what the programs share). At rest the desktop takes no CPU and
+  about 15 MB; Clock, Calculator and the others about 6 MB each.
+  Program Manager keeps the icons it drew (`~/.cache/retrodesktop`), so
+  it opens quicker the next time.
 
 ![Frames for fingers, at 150 %](docs/tablet.png)
 
@@ -69,14 +97,15 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.4_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.5_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
 `retro-desktop` starts the X server when none runs, brings Termux:X11 to
-the front, and the desktop fills its screen. Install programs as you
-always do (`pkg install firefox xfce4-terminal`...): Program Manager shows
-them (Options > Refresh, F5).
+the front, and the desktop fills its screen. Install programs with Setup
+(Program Manager > Main), or as you always do (`pkg install firefox`...):
+Program Manager shows them by themselves. With PulseAudio installed
+(Setup > Multimedia > Sound) the desktop starts it, so programs have sound.
 
 ### So Android lets it run
 
@@ -110,7 +139,7 @@ issue. `pkill retro-desktop` ends the desktop and all its programs.
 
 | Keys | What they do |
 |---|---|
-| Alt+Tab | the window behind to the front (again, quickly: the ones behind it) |
+| Alt+Tab | holding Alt: a box with the next window; Tab again for the one behind; let go to go there |
 | Alt+Shift+Tab | the other way |
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
@@ -124,10 +153,15 @@ Cascade, Tile, Arrange Icons, Exit. Menus work as 3.1's: the underlined
 letter chooses an item, the arrows and Enter too, Esc closes. Double click a title bar to maximize a window; double click its
 control-menu box to close it.
 
+Menus open with a click or a finger, and the underlined letter, the
+arrows, Enter and Esc work in them as in 3.1.
+
 Every part is also a command: `retro-desktop progman`, `control`,
 `tasklist`, `terminal` (`terminal -e command` runs a command in it),
-`browser` (Retro Browser; pages to open after it),
-`clock`, `calc`, `calendar`, `cardfile`.
+`browser` (Retro Browser; pages to open after it), `setup` (`setup gimp`:
+one program at once), `write` (a document after it), `open` (a file or a
+link, in its program), `clipboard`, `mines`, `solitaire`, `reversi`,
+`run`, `clock`, `calc`, `calendar`, `cardfile`.
 
 ## On a Linux computer
 
@@ -164,7 +198,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.4 && git push origin v0.1.4`).
+tag is pushed (`git tag v0.1.5 && git push origin v0.1.5`).
 
 ## How it works
 

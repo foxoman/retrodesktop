@@ -6,13 +6,14 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[strutils, math]
+import std/[strutils, math, times]
 import retroui
 import common, link, art
 
 type Applet = enum
   apColor = "Color", apDesktop = "Desktop", apFonts = "Fonts", apWindows = "Windows",
-  apPrograms = "Linux Programs", apAndroid = "Android", apAbout = "About"
+  apDateTime = "Date/Time", apSaver = "Screen Saver", apPrograms = "Linux Programs",
+  apAndroid = "Android", apAbout = "About"
 
 var
   conf: Settings
@@ -36,8 +37,19 @@ var
   linuxLook = true
   wakeLock = true
   startProgman = true
+  reopenPrograms = true
+  clock24 = true
+  timeZone = ""
+  saver = 0
+  saverDelay = 5
+  saverText = ""
 
 const
+  Savers* = ["(None)", "Blank Screen", "Starfield", "Mystify", "Marquee"]
+  Zones = ["", "UTC", "Asia/Muscat", "Asia/Dubai", "Asia/Riyadh", "Asia/Kolkata", "Asia/Tokyo",
+           "Asia/Shanghai", "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Moscow",
+           "Africa/Cairo", "America/New_York", "America/Chicago", "America/Los_Angeles",
+           "America/Sao_Paulo", "Australia/Sydney"]
   WallModes = ["fill", "center", "tile", "stretch"]
   AutoOnOff = ["auto", "on", "off"]
 
@@ -62,6 +74,12 @@ proc readAll() =
   linuxLook = conf.setting("linuxLook", "on") != "off"
   wakeLock = conf.setting("wakeLock", "on") != "off"
   startProgman = conf.setting("startProgman", "on") != "off"
+  reopenPrograms = conf.setting("reopen", "on") != "off"
+  clock24 = conf.setting("clock24", "on") != "off"
+  timeZone = conf.setting("timezone", "")
+  saver = max(0, Savers.find(conf.setting("saver", "(None)")))
+  try: saverDelay = clamp(parseInt(conf.setting("saverDelay", "5")), 1, 120) except ValueError: saverDelay = 5
+  saverText = conf.setting("saverText", DesktopName)
 
 proc saveAll() =
   ## Keeps what the dialogs set; the desktop and its programs take it now.
@@ -79,6 +97,12 @@ proc saveAll() =
   conf["linuxLook"] = (if linuxLook: "on" else: "off")
   conf["wakeLock"] = (if wakeLock: "on" else: "off")
   conf["startProgman"] = (if startProgman: "on" else: "off")
+  conf["reopen"] = (if reopenPrograms: "on" else: "off")
+  conf["clock24"] = (if clock24: "on" else: "off")
+  conf["timezone"] = timeZone.strip
+  conf["saver"] = Savers[clamp(saver, 0, Savers.high)]
+  conf["saverDelay"] = $saverDelay
+  conf["saverText"] = saverText
   saveDesktopSettings(conf)
   applyDesktopLook()
   retroCommand(RetroLookChanged)
@@ -89,6 +113,8 @@ proc artOf(a: Applet): string =
   of apDesktop: "control"
   of apFonts: "readme"
   of apWindows: "window"
+  of apDateTime: "datetime"
+  of apSaver: "saver"
   of apPrograms: "app"
   of apAndroid: "terminal"
   of apAbout: "logo"
@@ -150,6 +176,7 @@ proc desktopDialog() =
       group "Termux":
         checkbox("&Keep Termux awake while the desktop runs (termux-wake-lock)", wakeLock)
     checkbox("Start &Program Manager with the desktop", startProgman)
+    checkbox("&Reopen the programs that were open when the desktop ended", reopenPrograms)
     if okCancel(): saveAll()
   if pickWall:
     if filePicker(pickWall, wallpaper, fmOpen, ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.gif"],
@@ -185,6 +212,45 @@ proc windowsDialog() =
     paragraph "Frames for fingers: taller title bars and wider borders; an icon opens with one " &
       "tap. Automatic: on in Termux. Open maximized: new windows fill the screen. " &
       "Automatic: on a phone's screen in Termux."
+    if okCancel(): saveAll()
+
+proc dateTimeDialog() =
+  dialog(showDialog, "Date & Time", 440):
+    let t = now()
+    form 0:
+      field "Date:": label t.format("dddd, d MMMM yyyy")
+      field "Time:": label t.format(if clock24: "HH:mm:ss" else: "h:mm:ss tt")
+      field "&Clock:":
+        row:
+          var k = if clock24: 0 else: 1
+          radio("&24 hours", k, 0)
+          radio("&12 hours", k, 1)
+          clock24 = k == 0
+      field "Time &zone:": comboEdit(timeZone, Zones, w = dp(220))
+    paragraph "The date and the time are Android's (or the computer's): Settings > " &
+      "System > Date & time sets them. The time zone here is for the desktop's programs " &
+      "(TZ); empty: the system's own."
+    wakeIn(1000)
+    if okCancel(): saveAll()
+
+proc saverDialog() =
+  dialog(showDialog, "Screen Saver", 440):
+    form 0:
+      field "&Name:":
+        row:
+          combo(Savers, saver)
+          if button("&Test", enabled = saver > 0):
+            saveAll()
+            launch(selfCommand("saver") & " now")
+      field "&Delay:":
+        row([-1, 80]):
+          slider(saverDelay, 1, 60, ticks = 6)
+          label $saverDelay & " minutes"
+      if Savers[clamp(saver, 0, Savers.high)] == "Marquee":
+        field "Te&xt:": edit saverText
+    paragraph "It starts when nothing was typed or touched for the delay; a key, a click " &
+      "or a touch ends it. On a phone it takes the battery while it runs: Blank Screen " &
+      "takes least."
     if okCancel(): saveAll()
 
 proc programsDialog() =
@@ -231,8 +297,9 @@ proc runControl*() =
   readAll()
   applyDesktopLook()
   openApp("Control Panel", scaled(460), scaled(300), frame = wfSystem, userFrame = false, id = "control")
+  showArt("control")
   followLook()
-  applets = @[apColor, apDesktop, apFonts, apWindows, apPrograms]
+  applets = @[apColor, apDesktop, apFonts, apWindows, apDateTime, apSaver, apPrograms]
   if inTermux(): applets.add apAndroid
   applets.add apAbout
   marked = newSeq[bool](applets.len)
@@ -268,6 +335,8 @@ proc runControl*() =
                  of apDesktop: "The desktop's color, pattern and wallpaper"
                  of apFonts: "The font, the text size, the size of everything"
                  of apWindows: "Frames for fingers; windows that open maximized"
+                 of apDateTime: "The clock's hours and the time zone"
+                 of apSaver: "A screen saver, after a while with nothing done"
                  of apPrograms: "The look GTK, Qt and other programs are given"
                  of apAndroid: "Keeping the desktop running on Android"
                  of apAbout: "About " & DesktopName)
@@ -278,6 +347,8 @@ proc runControl*() =
       of apDesktop: desktopDialog()
       of apFonts: fontsDialog()
       of apWindows: windowsDialog()
+      of apDateTime: dateTimeDialog()
+      of apSaver: saverDialog()
       of apPrograms: programsDialog()
       of apAndroid: androidDialog()
       of apAbout: aboutDialog()

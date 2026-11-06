@@ -209,6 +209,102 @@ proc drawIcon(c: Canvas2D; kind: string) =
       c.fillRect(6 + float(i) * 8, 15, 4, 4)
   of "window":
     windowShape(c, 3, 5, 26, 22)
+  of "setup":
+    # (a box of programs, and a disk going in)
+    box(c, 4, 13, 20, 16, "#c08040")
+    c.fillStyle = "#804000"
+    c.fillRect(5, 17, 18, 1)
+    box(c, 15, 3, 14, 14, Navy)
+    box(c, 18, 4, 8, 5, Gray)
+    box(c, 18, 11, 8, 5, White)
+    c.fillStyle = Black
+    c.fillRect(23, 5, 2, 3)
+  of "mines":
+    # (a mine: the ball, its spikes, the shine)
+    c.strokeStyle = Black
+    c.lineWidth = 2
+    for k in 0 ..< 4:
+      let a = float(k) * PI / 4
+      c.beginPath()
+      c.moveTo(16 - cos(a) * 13, 16 - sin(a) * 13)
+      c.lineTo(16 + cos(a) * 13, 16 + sin(a) * 13)
+      c.stroke()
+    c.fillStyle = Black
+    c.beginPath(); c.arc(16, 16, 8.5, 0, 2 * PI); c.fill()
+    c.fillStyle = White
+    c.fillRect(12, 12, 3, 3)
+  of "cards":
+    box(c, 3, 6, 16, 22, White)
+    c.fillStyle = Red
+    c.font = "bold 9px serif"
+    c.textAlign = "left"
+    c.textBaseline = "top"
+    c.fillText("A", 5, 7)
+    c.beginPath(); c.moveTo(11, 14); c.lineTo(14, 18); c.lineTo(11, 22); c.lineTo(8, 18); c.closePath(); c.fill()
+    box(c, 13, 3, 16, 22, Navy)
+    c.strokeStyle = "#4040ff"
+    c.lineWidth = 1
+    for k in 0 ..< 5:
+      c.beginPath(); c.moveTo(15, 6 + float(k) * 4); c.lineTo(27, 6 + float(k) * 4); c.stroke()
+  of "reversi":
+    box(c, 2, 2, 28, 28, Green)
+    c.strokeStyle = "#004000"
+    c.lineWidth = 1
+    for k in 1 .. 3:
+      c.beginPath(); c.moveTo(2 + float(k) * 7, 2); c.lineTo(2 + float(k) * 7, 30); c.stroke()
+      c.beginPath(); c.moveTo(2, 2 + float(k) * 7); c.lineTo(30, 2 + float(k) * 7); c.stroke()
+    for (x, y, ink) in [(12.5, 12.5, Black), (19.5, 19.5, Black), (19.5, 12.5, White), (12.5, 19.5, White)]:
+      c.fillStyle = ink
+      c.beginPath(); c.arc(x, y, 3, 0, 2 * PI); c.fill()
+  of "write":
+    box(c, 6, 3, 20, 26, White)
+    c.fillStyle = Navy
+    c.font = "bold 13px serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("A", 13, 11)
+    c.fillStyle = Dark
+    for r in 0 .. 3: c.fillRect(9, 17 + float(r) * 3, 14 - float(r mod 2) * 4, 1)
+    # (a pen across the page)
+    c.strokeStyle = Black
+    c.lineWidth = 2.5
+    c.beginPath(); c.moveTo(29, 6); c.lineTo(19, 22); c.stroke()
+    c.strokeStyle = Yellow
+    c.lineWidth = 1.2
+    c.beginPath(); c.moveTo(29, 6); c.lineTo(19.5, 21); c.stroke()
+  of "clipboard":
+    box(c, 5, 5, 22, 25, "#c08040")
+    box(c, 8, 9, 16, 18, White)
+    box(c, 11, 2, 10, 6, Gray)
+    c.fillStyle = Dark
+    for r in 0 .. 3: c.fillRect(10, 12 + float(r) * 3.5, 12, 1)
+  of "datetime":
+    box(c, 2, 5, 20, 22, White)
+    c.fillStyle = Red
+    c.fillRect(3, 6, 18, 5)
+    c.fillStyle = Black
+    c.font = "bold 10px sans-serif"
+    c.textAlign = "center"
+    c.textBaseline = "middle"
+    c.fillText("31", 12, 19)
+    c.fillStyle = Black
+    c.beginPath(); c.arc(23, 21, 8, 0, 2 * PI); c.fill()
+    c.fillStyle = White
+    c.beginPath(); c.arc(23, 21, 6.8, 0, 2 * PI); c.fill()
+    c.strokeStyle = Black
+    c.lineWidth = 1.3
+    c.beginPath(); c.moveTo(23, 21); c.lineTo(23, 16); c.moveTo(23, 21); c.lineTo(26, 22); c.stroke()
+  of "saver":
+    box(c, 2, 3, 28, 21, Gray)
+    c.fillStyle = Black
+    c.fillRect(4, 5, 24, 17)
+    c.fillStyle = White
+    for (x, y) in [(7.0, 8.0), (13.0, 14.0), (20.0, 9.0), (24.0, 17.0), (10.0, 19.0), (17.0, 18.0)]:
+      c.fillRect(x, y, 1.5, 1.5)
+    c.fillStyle = Yellow
+    c.fillRect(15, 11, 2, 2)
+    box(c, 11, 24, 10, 3, Gray)
+    box(c, 6, 27, 20, 3, Gray)
   of "logo":
     # (Retro Desktop's: a screen with a setting sun over the sea)
     box(c, 2, 3, 28, 21, Gray)
@@ -237,7 +333,8 @@ proc drawIcon(c: Canvas2D; kind: string) =
 proc appIcon*(kind: string; size: int): Bitmap =
   ## The desktop's icon `kind` (progman, clock, calc, calendar, cardfile,
   ## control, tasklist, notepad, files, paint, photo, board, terminal, mail,
-  ## gallery, run, readme, group, window, logo; anything else: a program's)
+  ## gallery, run, readme, group, window, logo, setup, mines, cards, reversi,
+  ## write, clipboard, datetime, saver; anything else: a program's)
   ## at `size` pixels, kept for the next time.
   let key = kind & "@" & $size
   if cache.hasKey(key): return cache[key]
