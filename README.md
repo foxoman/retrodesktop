@@ -25,9 +25,9 @@ one program of about 5 MB, nothing to set up.
   tablet turns. The programs open when the desktop ended -- you exited, or
   Android stopped Termux -- open again where they were the next time.
 - **The panel**, along the bottom: Windows 95's idea in 3.1's colors --
-  **Programs** with every group of Program Manager as a menu (and Run,
-  Help, Control Panel, Task List, Exit), a button for each window, the
-  battery and the clock. Control Panel > Windows turns it off.
+  **Programs** with every group of Program Manager as a menu, each program
+  with its icon (and Run, Help, Control Panel, Task List, Exit), a button
+  for each window, the battery and the clock. Control Panel > Windows turns it off.
 - **Icons on the desktop:** what is in your Desktop folder -- folders,
   files, programs -- where you drag them; Program Manager's File > Put on
   the Desktop makes a program's icon.
@@ -150,7 +150,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.7_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.8_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -264,7 +264,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.7 && git push origin v0.1.7`).
+tag is pushed (`git tag v0.1.8 && git push origin v0.1.8`).
 
 ## How it works
 

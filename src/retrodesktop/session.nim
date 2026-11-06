@@ -504,6 +504,7 @@ proc watchMemory() =
   onMemoryPressure(proc (level: MemoryPressure) =
     forgetIcons()
     forgetDeskIcons()
+    forgetMenuPictures()
     tile = nil
     wallTile = nil
     if level == mpCritical:

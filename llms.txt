@@ -57,9 +57,14 @@ the windows, the clock) and the Desktop folder's icons.
 - Terminal: `vt.nim` (xterm/VT220 escape sequences, scrollback, the
   alternate screen) and `terminal.nim` (a pseudo-terminal, a reader thread
   that wakes the window with an X ClientMessage, drawing in the CGA colors).
-- Menus over the windows (the desktop's, the icons', the control menu) are
-  `wm.showMenu(items, x, y)`: an override-redirect window with the pointer
-  and the keyboard grabbed; letters, arrows, Enter, Esc.
+- Menus over the windows (the desktop's, the icons', the control menu, the
+  panel's Programs) are `wm.showMenu(items, x, y)`: an override-redirect
+  window with the pointer and the keyboard grabbed; letters, arrows, Enter,
+  Esc; `menuItem(label, keys, enabled, action, icon)` (a picture at
+  `menuIconSize()` pixels).
+- The screen's size is the root window's, from its ConfigureNotify
+  (`wm.screenSize`), never Xlib's DisplayWidth (the size the connection
+  began with: Termux:X11 changes it after the start).
 - Alt+Tab shows a box while Alt is held (the keyboard grabbed to it; Alt's
   release chooses); frames snap to edges while moved; the programs open
   (their command lines from /proc, their windows' places) are kept in

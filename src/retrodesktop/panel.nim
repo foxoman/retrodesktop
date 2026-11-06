@@ -11,7 +11,7 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, osproc, strutils, json, times, math, streams]
+import std/[os, osproc, strutils, json, times, math, streams, tables]
 import retroui
 import retroui/canvas2d
 import xlib, common, wm, art, catalog
@@ -29,6 +29,30 @@ var
   batteryJob: Process
   minuteShown = -1
   pressedOn = -2                 ## the button held (-1 Programs)
+  menuPics: Table[string, Bitmap]  ## the menus' pictures, at their size
+
+proc pic(art: string; icon = ""): Bitmap =
+  ## A menu item's picture: the program's own icon (an icon theme's, or a
+  ## file) when it has one, else the desktop's picture `art`.
+  let size = menuIconSize()
+  let key = art & "|" & icon & "@" & $size
+  if menuPics.hasKey(key): return menuPics[key]
+  var b: Bitmap = nil
+  if icon.len > 0: b = loadIcon(icon, size)
+  if b == nil: b = appIcon((if art.len > 0: art else: "app"), size)
+  if menuPics.len > 300: menuPics.clear()
+  menuPics[key] = b
+  b
+
+proc forgetMenuPictures*() =
+  ## (memory runs low: drawn again when a menu opens)
+  menuPics.clear()
+
+proc groupArt(name: string): string =
+  case name
+  of "DOS": "dos"
+  of "Android": "android"
+  else: "group"
 
 proc panelHeight*(): int = tbh() + dpx(10)
 
@@ -157,11 +181,12 @@ proc openGroup(name: string; items: seq[CatItem]): proc () =
 proc groupMenu(name: string; items: seq[CatItem]) =
   let (_, sh) = screenSize()
   var list = @[menuItem((if ui.rtl: tr("Programs") & " >" else: "< " & tr("Programs")), "", true,
-                        proc () = programsMenu()), menuLine()]
+                        proc () = programsMenu(), pic("progman")), menuLine()]
   for it in items:
     let cmd = if it.terminal: terminalCommand() & " -e " & it.command else: it.command
     let helpCall = it.command == "?help"
-    list.add menuItem(it.name.replace("&", "&&"), "", true, startItem(cmd, helpCall))
+    list.add menuItem(it.name.replace("&", "&&"), "", true, startItem(cmd, helpCall),
+                      pic(it.art, it.icon))
   showMenu(list, dpx(3), sh - panelHeight(), above = true)
 
 proc programsMenu*() =
@@ -171,16 +196,17 @@ proc programsMenu*() =
   var list: seq[MenuItem]
   for (name, items) in catalog():
     if items.len == 0: continue
-    list.add menuItem((if ui.rtl: tr(name) & "  <" else: "&" & tr(name) & "  >"), "", true,
-                      openGroup(name, items))
+    # (the arrow of a menu that opens another, at the far side, as 95's)
+    list.add menuItem((if ui.rtl: tr(name) else: "&" & tr(name)), (if ui.rtl: "<" else: ">"), true,
+                      openGroup(name, items), pic(groupArt(name)))
   list.add menuLine()
-  list.add menuItem("&Run...", "", true, proc () = launch(selfCommand("run")))
-  list.add menuItem("&Help", "F1", true, proc () = launch(selfCommand("help") & " contents"))
-  list.add menuItem("&Control Panel", "", true, proc () = launch(selfCommand("control")))
-  list.add menuItem("&Task List...", "Ctrl+Esc", true, proc () =
-    if taskList != nil: taskList())
+  list.add menuItem("&Run...", "", true, proc () = launch(selfCommand("run")), pic("run"))
+  list.add menuItem("&Help", "F1", true, proc () = launch(selfCommand("help") & " contents"), pic("help"))
+  list.add menuItem("&Control Panel", "", true, proc () = launch(selfCommand("control")), pic("control"))
+  list.add menuItem("&Task List...", "Ctrl+Esc", true, (proc () =
+    if taskList != nil: taskList()), pic("tasklist"))
   list.add menuLine()
-  list.add menuItem("E&xit Retro Desktop...", "", true, proc () = launch(selfCommand("exit")))
+  list.add menuItem("E&xit Retro Desktop...", "", true, proc () = launch(selfCommand("exit")), pic("exit"))
   showMenu(list, dpx(3), sh - panelHeight(), above = true)
 
 proc buttonAt(x: int): int =

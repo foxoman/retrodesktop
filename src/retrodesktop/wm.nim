@@ -46,9 +46,10 @@ type
 
   DragKind = enum dkNone, dkMove, dkResize, dkButton
 
-  MenuItem* = tuple[label, keys: string; enabled: bool; action: proc ()]
+  MenuItem* = tuple[label, keys: string; enabled: bool; action: proc (); icon: Bitmap]
     ## A menu's item: its label ("&" before the letter to underline; "" a
-    ## line between groups), its keys, whether it can be chosen, what it does.
+    ## line between groups), its keys, whether it can be chosen, what it does,
+    ## its picture (nil: none; `menuIconSize` pixels).
 
 var
   dpy*: Display
@@ -77,7 +78,7 @@ var
   shownCursor: Table[Window, Part]
   cascadeAt = 0
   menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int;
-              fromX, fromY: int; armed: bool]
+              fromX, fromY: int; armed: bool; iconW: int]
   switchWin: Window              # Alt+Tab's box (None: not shown)
   backKey = 0                    # Android's Back (XF86Back), 0 when the keyboard has none
   backCloses = false             # ... closes the window in front (Control Panel > Windows)
@@ -119,8 +120,21 @@ proc frameH(c: Client): int = c.h + bw() + topOf()
 
 proc xcolor*(c: Color): culong = (culong(c.r) shl 16) or (culong(c.g) shl 8) or culong(c.b)
 
+var screenW, screenH: int        # the root window's size, as X said it last
+
 proc screenSize*(): tuple[w, h: int] =
-  (int(XDisplayWidth(dpy, scr)), int(XDisplayHeight(dpy, scr)))
+  ## The screen's size now. (Xlib's DisplayWidth keeps the size the
+  ## connection began with: Termux:X11 starts at one size and takes the
+  ## tablet's own a moment later, and a tablet turns -- the root window's
+  ## ConfigureNotify says the new one.)
+  if screenW > 0 and screenH > 0: (screenW, screenH)
+  else: (int(XDisplayWidth(dpy, scr)), int(XDisplayHeight(dpy, scr)))
+
+proc readScreenSize() =
+  var a: XWindowAttributes
+  if XGetWindowAttributes(dpy, root, addr a) != 0:
+    screenW = int(a.width)
+    screenH = int(a.height)
 
 var
   workBottom*: int               ## pixels at the bottom kept for the panel
@@ -870,6 +884,10 @@ proc closeMenu*() =
     menuWin = None
     menu.items = @[]
 
+proc menuIconSize*(): int =
+  ## The size of a menu item's picture (the screen's pixels).
+  max(16, dpx(if bigFrames: 32 else: 22)) - dpx(6)
+
 proc drawMenu() =
   if menuWin == None: return
   let t = ui.theme
@@ -895,10 +913,14 @@ proc drawMenu() =
     let ink = if not it.enabled: t.gray elif hot: t.selectText else: t.text
     cv.fillStyle = ink
     let ty = float(y + menu.itemH div 2)
+    if it.icon != nil:
+      let isz = menuIconSize()
+      let ix = if ui.rtl: menu.w - dpx(6) - isz else: dpx(6)
+      cv.drawImage(it.icon, float(ix), float(y + (menu.itemH - isz) div 2), float(isz), float(isz))
     if ui.rtl:
       # (right to left, as the interface: the label at the right, the keys at the left)
       cv.textAlign = "right"
-      cv.fillText(it.label.replace("&", ""), float(menu.w - dpx(14)), ty)
+      cv.fillText(it.label.replace("&", ""), float(menu.w - dpx(14) - menu.iconW), ty)
       if it.keys.len > 0:
         cv.textAlign = "left"
         cv.fillText(it.keys, float(dpx(10)), ty)
@@ -908,7 +930,7 @@ proc drawMenu() =
     # (the letter after "&" underlined, as 3.1's menus have it)
     let amp = it.label.find('&')
     let shown = it.label.replace("&", "")
-    let tx = float(dpx(14))
+    let tx = float(dpx(if menu.iconW > 0: 8 else: 14) + menu.iconW)
     cv.fillText(shown, tx, ty)
     if amp >= 0 and amp < shown.len:
       let x0 = tx + cv.measureText(shown[0 ..< amp]).width
@@ -928,13 +950,14 @@ proc menuItemAt(x, y: int): int =
     yy += h
   -1
 
-proc menuItem*(label, keys: string; enabled: bool; action: proc ()): MenuItem =
-  ## An item for `showMenu`.
-  (label, keys, enabled, action)
+proc menuItem*(label, keys: string; enabled: bool; action: proc (); icon: Bitmap = nil): MenuItem =
+  ## An item for `showMenu` (`icon`: its picture at the left, as the panel's
+  ## Programs menu has them).
+  (label, keys, enabled, action, icon)
 
 proc menuLine*(): MenuItem =
   ## A line between groups of items.
-  ("", "", false, nil)
+  ("", "", false, nil, Bitmap(nil))
 
 proc showMenu*(items: seq[MenuItem]; x, y: int; above = false) =
   ## A menu at `x`, `y` on the screen (the screen's pixels; `above`: its
@@ -951,6 +974,10 @@ proc showMenu*(items: seq[MenuItem]; x, y: int; above = false) =
       let t = tr(bare)
       if t != bare: it.label = t
   menu.itemH = max(16, dpx(if bigFrames: 32 else: 22))
+  # (a column for the pictures, when an item has one)
+  menu.iconW = 0
+  for it in menu.items:
+    if it.icon != nil: menu.iconW = menu.itemH
   # (as wide as its widest label and keys)
   let probe = newCanvas2D(4, 4)
   let px = max(9, int(round(float(menu.itemH) * 0.5)))
@@ -959,7 +986,7 @@ proc showMenu*(items: seq[MenuItem]; x, y: int; above = false) =
   for it in menu.items:
     lw = max(lw, probe.measureText(it.label.replace("&", "")).width)
     kw = max(kw, probe.measureText(it.keys).width)
-  menu.w = max(dpx(140), int(lw + kw) + dpx(14 + 24 + 10))
+  menu.w = max(dpx(140), int(lw + kw) + dpx(14 + 24 + 10) + menu.iconW)
   menu.h = 4
   for it in menu.items: menu.h += (if it.label.len == 0: menu.itemH div 2 else: menu.itemH)
   let (sw, sh) = screenSize()
@@ -1429,6 +1456,8 @@ proc handle(p: pointer): bool {.nimcall.} =
     return true
   of ConfigureNotify:
     if e.xconfigure.window == root:
+      screenW = int(e.xconfigure.width)
+      screenH = int(e.xconfigure.height)
       screenChanged()                    # (the desktop's window follows it)
       return true
     return e.xany.window != desk
@@ -1652,6 +1681,7 @@ proc start*(): bool =
   setLongs(dpy, root, atom(dpy, "_NET_CURRENT_DESKTOP"), XA_CARDINAL, [0.clong])
   # (the desktop's own window: at the bottom, the whole screen)
   setLongs(dpy, desk, aNetType, XA_ATOM, [clong(aTypeDesktop)])
+  readScreenSize()
   let (sw, sh) = screenSize()
   discard XMoveResizeWindow(dpy, desk, 0, 0, cuint(sw), cuint(sh))
   discard XLowerWindow(dpy, desk)

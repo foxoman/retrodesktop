@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.8
+
+- **Pictures in the panel's menus**: Programs shows each group with its
+  picture and an arrow at the right; a group's menu shows each program's
+  own icon (or the desktop's picture for it); Run, Help, Control Panel,
+  Task List and Exit have theirs. The window manager's menus take a
+  picture per item (`menuItem(..., icon)`, `menuIconSize`).
+- **The desktop follows the screen's size**: Termux:X11 can start at one
+  size and take the tablet's own a moment later; the desktop and the panel
+  stayed at the first size. The window manager now reads the size from the
+  root window's ConfigureNotify, not from Xlib's DisplayWidth, which keeps
+  the size the connection began with.
+- The package's Communicator is Retro Nim UI 0.21.1's: a room's window
+  shows the talk and who is in the room side by side, with the message box;
+  the state chooser and the Send a file and Info buttons no longer slip off
+  the side.
+
 ## 0.1.7
 
 - **The panel**: a bar along the bottom -- Windows 95's idea, in 3.1's

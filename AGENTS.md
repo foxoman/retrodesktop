@@ -90,6 +90,13 @@ alike.
    windows that may be gone inside `trapErrors`. Only a program's own
    unmapping (in its frame, or ICCCM's synthetic one to the root) lets
    go of its window.
+   The screen's size is `wm.screenSize()` (the root window's, from its
+   ConfigureNotify), never Xlib's `XDisplayWidth` in the desktop's own
+   connection: that one keeps the size the connection began with, and
+   Termux:X11 changes it after the start.
+   A closure made in a loop (a menu item's action) sees the loop's last
+   values: make each one in a proc of its own (`startItem`, `openGroup` in
+   panel.nim).
    The desktop is under every window, so whatever has to show over them --
    its menu, the icons' menu, the control menu -- is the manager's
    `showMenu` (a window of its own, the pointer and the keyboard grabbed),

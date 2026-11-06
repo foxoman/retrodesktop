@@ -11,7 +11,7 @@ import ar
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.7"
+  DesktopVersion* = "0.1.8"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"

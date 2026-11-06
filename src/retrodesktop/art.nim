@@ -560,6 +560,23 @@ proc drawIcon(c: Canvas2D; kind: string) =
     c.textBaseline = "middle"
     c.fillText("A", 9.5, 13.8)
     c.fillText("ع", 22.5, 18.5)
+  of "exit":
+    # (a door, open, and the way out)
+    box(c, 5, 3, 16, 26, "#804000")
+    c.fillStyle = Black
+    c.fillRect(7, 5, 12, 22)
+    c.fillStyle = "#c08040"
+    c.beginPath(); c.moveTo(7, 5); c.lineTo(15, 8); c.lineTo(15, 30); c.lineTo(7, 27); c.closePath(); c.fill()
+    c.strokeStyle = Black
+    c.lineWidth = 1
+    c.stroke()
+    c.fillStyle = Yellow
+    c.fillRect(13, 17, 1.5, 2)
+    c.strokeStyle = Red
+    c.lineWidth = 2.5
+    c.beginPath(); c.moveTo(18, 16); c.lineTo(29, 16); c.stroke()
+    c.fillStyle = Red
+    c.beginPath(); c.moveTo(31, 16); c.lineTo(25, 11); c.lineTo(25, 21); c.closePath(); c.fill()
   of "logo":
     # (Retro Desktop's: a screen with a setting sun over the sea)
     box(c, 2, 3, 28, 21, Gray)
