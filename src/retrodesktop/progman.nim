@@ -9,7 +9,7 @@
 
 import std/[os, strutils, tables, math]
 import retroui
-import common, link, art
+import common, link, art, browser
 
 type
   Item = object
@@ -146,6 +146,9 @@ proc loadGroups() =
                    "The windows open, and the memory each takes")
   main.add builtin("Terminal", selfCommand("terminal"), "terminal",
                    "The shell's command line, in a PC's 16 text colors")
+  if firefoxPath().len > 0:
+    main.add builtin("Web Browser", selfCommand("browser"), "browser",
+                     "Retro Browser: Firefox in the desktop's look, on a profile of its own")
   main.add builtin("Read Me", "?help", "readme", "How the desktop works")
   companionItem("Notepad", "retro-notepad", "notepad", "Text files", acc)
   companionItem("Paintbrush", "retro-photo", "paint", "Retro Photo: pictures and painting", acc)
@@ -368,7 +371,19 @@ proc runProgman*() =
   onMemoryPressure(proc (level: MemoryPressure) =
     icons.clear()
     forgetIcons())
+  # (programs installed or removed while it runs: the folders of desktop
+  # entries looked at every few seconds, the groups made again when one
+  # changed)
+  var seen = appsStamp()
+  var lookedAt = 0
   while beginFrame():
+    if ui.now - lookedAt >= 3000:
+      lookedAt = ui.now
+      let s = appsStamp()
+      if s != seen:
+        seen = s
+        loadGroups()
+    wakeIn(3000)
     menus()
     mdiArea(-1):
       for g in groups:

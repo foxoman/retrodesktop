@@ -8,17 +8,20 @@ One program, `retro-desktop`: with no argument the desktop (the window
 manager, the desktop's background, minimized windows as icons, its menu);
 with an argument one of its programs: `progman` (Program Manager),
 `control` (Control Panel), `tasklist` (Task List), `terminal` (Terminal;
-`-e command` runs a command), `clock`, `calc`, `calendar`, `cardfile`.
+`-e command` runs a command), `browser` (Retro Browser: Firefox with a 3.1
+userChrome.css on its own profile), `clock`, `calc`, `calendar`, `cardfile`.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
-- Build: `nimble build -d:release` (needs retroui >= 0.20.6); the Termux
+- Build: `nimble build -d:release` (needs retroui >= 0.20.7); the Termux
   package: `sh tools/build-deb.sh`.
 - The window manager runs on the desktop's own X connection (retroui's
   `x11EventHook`); frames are X windows with title bars drawn by retroui's
   canvas.
-- Other programs get the look through XSETTINGS, X resources, fontconfig and
-  a generated "Retro31" GTK 3 theme.
+- Other programs get the look through XSETTINGS, X resources, fontconfig, a
+  generated "Retro31" GTK 3 theme (3.1 scroll bars, no overlay scrolling)
+  and the "Retro31" Xcursor theme in ~/.icons (retroui's
+  `classicCursorArt`, written at 16-64 px).
 - The desktop's log: `~/.local/share/retrodesktop/desktop.log`; a crash
   ends it at once (`_exit`), and a new start ends a desktop that does not
   answer the ping and takes its windows.

@@ -9,6 +9,8 @@
 import std/[os, strutils, math]
 import retroui
 import retroui/[typeset, ttf]
+import retroui/uirelays/drivers/x11_driver
+import retroui/uirelays/screen
 import xlib, common
 
 const
@@ -27,6 +29,11 @@ proc fontPoints*(): int =
   ## from the dpi). (`textSize` is in logical pixels: `pxScale` of the
   ## screen's each.)
   max(7, int(round(textSize() * float(max(1, pxScale)) / density() * 72 / 96)))
+
+proc cursorSize*(): int =
+  ## The cursors' size: 16 pixels at the screen's scale, in whole steps (the
+  ## classic drawings stay crisp).
+  16 * max(1, int(round(devScale())))
 
 proc dpiNow*(): int =
   ## The dots per inch programs are told: the screen's density (96 at 100 %).
@@ -124,9 +131,16 @@ proc gtkCss*(t: Theme): string =
     "headerbar, .titlebar { background-image: none; background-color: " & sel & "; color: " & selText &
       "; border: none; box-shadow: none; min-height: 24px; padding: 0 4px; }\n" &
     "headerbar .title, .titlebar .title { color: " & selText & "; font-weight: bold; }\n" &
-    "scrollbar { background-color: " & scroll & "; border: none; }\n" &
+    # (scroll bars as 3.1 had them: always there, an arrow button at each end)
+    "* { -GtkScrollbar-has-backward-stepper: true; -GtkScrollbar-has-forward-stepper: true; }\n" &
+    "scrollbar { background-color: " & scroll & "; border: 1px solid " & frame & "; }\n" &
     "scrollbar slider { background-color: " & bg & "; border: 1px solid " & frame &
-      "; box-shadow: inset 1px 1px " & light & "; min-width: 14px; min-height: 14px; margin: 0; }\n" &
+      "; box-shadow: inset 1px 1px " & light & ", inset -1px -1px " & shadow &
+      "; min-width: 15px; min-height: 15px; margin: 0; }\n" &
+    "scrollbar button { background-color: " & bg & "; color: " & fg & "; border: 1px solid " &
+      frame & "; box-shadow: inset 1px 1px " & light & ", inset -1px -1px " & shadow &
+      "; min-width: 15px; min-height: 15px; padding: 0; }\n" &
+    "scrollbar button:active { box-shadow: inset 1px 1px " & shadow & "; }\n" &
     "notebook > header { background-color: " & bg & "; }\n" &
     "notebook > header tab { background-color: " & bg & "; color: " & fg & "; border: 1px solid " &
       frame & "; border-bottom: none; padding: 3px 10px; }\n" &
@@ -153,19 +167,126 @@ proc installGtkTheme*(t: Theme) =
       writeFile(ini, Marker & "\n[Settings]\ngtk-theme-name=" & ThemeName & "\n" &
         "gtk-font-name=FreeSans " & $fontPoints() & "\ngtk-dialogs-use-header=false\n" &
         "gtk-xft-antialias=1\ngtk-xft-hinting=1\ngtk-xft-hintstyle=hintslight\ngtk-xft-rgba=none\n" &
-        "gtk-decoration-layout=menu:minimize,maximize\ngtk-enable-animations=false\n")
+        "gtk-decoration-layout=menu:minimize,maximize\ngtk-enable-animations=false\n" &
+        "gtk-overlay-scrolling=false\ngtk-primary-button-warps-slider=false\n")
   except CatchableError: discard
 
 # ---- what other programs are told -------------------------------------------------------------------
+
+# ---- the cursors -----------------------------------------------------------------------------------
+
+const
+  CursorTheme* = "Retro31"
+  CursorNames: array[CursorKind, seq[string]] = [
+    curDefault: @["left_ptr", "default", "arrow", "top_left_arrow", "left_arrow", "X_cursor",
+                  "help", "question_arrow", "whats_this", "context-menu", "copy", "alias",
+                  "dnd-copy", "dnd-move", "dnd-link", "dnd-none", "no-drop", "not-allowed",
+                  "crossed_circle", "forbidden", "pirate"],
+    curArrow: @["right_ptr", "draft_large", "draft_small", "center_ptr"],
+    curIbeam: @["xterm", "text", "ibeam", "vertical-text"],
+    curWait: @["watch", "wait", "progress", "left_ptr_watch", "half-busy"],
+    curCrosshair: @["crosshair", "cross", "tcross", "cross_reverse", "diamond_cross", "cell",
+                    "plus", "target"],
+    curHand: @["hand2", "hand1", "hand", "pointer", "pointing_hand", "grab", "grabbing",
+               "openhand", "closedhand", "dnd-ask"],
+    curSizeNS: @["sb_v_double_arrow", "v_double_arrow", "ns-resize", "row-resize", "n-resize",
+                 "s-resize", "top_side", "bottom_side", "size_ver", "split_v", "double_arrow",
+                 "up-arrow", "down-arrow"],
+    curSizeWE: @["sb_h_double_arrow", "h_double_arrow", "ew-resize", "col-resize", "e-resize",
+                 "w-resize", "left_side", "right_side", "size_hor", "split_h"],
+    curSizeNWSE: @["bottom_right_corner", "top_left_corner", "nwse-resize", "nw-resize",
+                   "se-resize", "size_fdiag", "bd_double_arrow", "ul_angle", "lr_angle"],
+    curSizeNESW: @["bottom_left_corner", "top_right_corner", "nesw-resize", "ne-resize",
+                   "sw-resize", "size_bdiag", "fd_double_arrow", "ur_angle", "ll_angle"],
+    curMove: @["fleur", "move", "all-scroll", "size_all"]]
+
+proc xcursorFile(c: CursorKind): string =
+  ## Cursor `c` as an Xcursor file (what libXcursor reads for GTK, Qt,
+  ## Firefox and the rest): the classic drawing at 16, 24, 32, 48 and 64
+  ## pixels, as crisp squares of its pixels.
+  let art = classicCursorArt(c)
+  var aw = 0
+  for r in art.rows: aw = max(aw, r.len)
+  let sizes = [16, 24, 32, 48, 64]
+  proc put32(s: var string; v: uint32) =
+    for i in 0 .. 3: s.add char((v shr (8 * i)) and 255)
+  var images: seq[string]
+  for n in sizes:
+    let k = float(n) / 16
+    let w = int(ceil(float(aw) * k))
+    let h = int(ceil(float(art.rows.len) * k))
+    var img = ""
+    img.put32 36
+    img.put32 0xFFFD0002'u32
+    img.put32 uint32(n)
+    img.put32 1
+    img.put32 uint32(w)
+    img.put32 uint32(h)
+    img.put32 uint32(int(float(art.hx) * k + (if art.hx > 0: k / 2 else: 0)))
+    img.put32 uint32(int(float(art.hy) * k + (if art.hy > 0: k / 2 else: 0)))
+    img.put32 0
+    for y in 0 ..< h:
+      let row = art.rows[min(art.rows.high, int(float(y) / k))]
+      for x in 0 ..< w:
+        let col = int(float(x) / k)
+        let ch = if col < row.len: row[col] else: ' '
+        img.put32(case ch
+                  of 'X': 0xFF000000'u32
+                  of '.': 0xFFFFFFFF'u32
+                  else: 0'u32)
+    images.add img
+  result = "Xcur"
+  result.put32 16
+  result.put32 0x10000
+  result.put32 uint32(images.len)
+  var at = 16 + 12 * images.len
+  for i, n in sizes:
+    result.put32 0xFFFD0002'u32
+    result.put32 uint32(n)
+    result.put32 uint32(at)
+    at += images[i].len
+  for img in images: result.add img
+
+proc installCursors*() =
+  ## The classic cursors as the cursor theme "Retro31" (~/.icons/Retro31),
+  ## and the default theme when the user has none of their own: programs
+  ## that are not the desktop's show them too, at the screen's size.
+  let dir = getHomeDir() / ".icons" / CursorTheme
+  let index = dir / "index.theme"
+  let stamp = "Comment=The cursors of Retro Desktop " & DesktopVersion
+  try:
+    if fileExists(index) and stamp in readFile(index): return
+    createDir(dir / "cursors")
+    for c in CursorKind:
+      let names = CursorNames[c]
+      if names.len == 0: continue
+      # (one file a shape; its other names link to it)
+      let first = dir / "cursors" / names[0]
+      writeFile(first, xcursorFile(c))
+      for n in names[1 .. ^1]:
+        let p = dir / "cursors" / n
+        try:
+          if symlinkExists(p) or fileExists(p): removeFile(p)
+          createSymlink(names[0], p)
+        except OSError: copyFile(first, p)
+    writeFile(index, "[Icon Theme]\nName=" & CursorTheme & "\n" & stamp & "\n")
+    let def = getHomeDir() / ".icons" / "default" / "index.theme"
+    if not fileExists(def) or "Retro Desktop" in readFile(def):
+      createDir(def.parentDir)
+      writeFile(def, "[Icon Theme]\nName=Default\nComment=Retro Desktop's choice\nInherits=" &
+                     CursorTheme & "\n")
+  except CatchableError: discard
 
 proc childEnvironment*() =
   ## What programs started from the desktop inherit: GTK 3 without its own
   ## title bars (the desktop's frames), Qt following GTK where it can, no
   ## accessibility bus to wait for.
   putEnv("GTK_CSD", "0")
+  putEnv("GTK_OVERLAY_SCROLLING", "0")        # (scroll bars always there, as 3.1's)
   putEnv("NO_AT_BRIDGE", "1")
   if not existsEnv("QT_QPA_PLATFORMTHEME"): putEnv("QT_QPA_PLATFORMTHEME", "gtk3")
-  putEnv("XCURSOR_SIZE", $max(16, devPx(16)))
+  putEnv("XCURSOR_SIZE", $cursorSize())
+  putEnv("XCURSOR_THEME", CursorTheme)
   putEnv("RETRO_THEME", desktopSettings().setting("scheme", "Classic"))
 
 proc ownResources*(d: Display): bool =
@@ -181,7 +302,7 @@ proc setResources*(d: Display; t: Theme) =
   let root = XRootWindow(d, XDefaultScreen(d))
   let res = "! Retro Desktop's (it puts them back each time it starts)\n" &
     "Xft.dpi:\t" & $dpiNow() & "\nXft.antialias:\t1\nXft.hinting:\t1\nXft.hintstyle:\thintslight\n" &
-    "Xft.rgba:\tnone\nXcursor.size:\t" & $max(16, devPx(16)) & "\n" &
+    "Xft.rgba:\tnone\nXcursor.size:\t" & $cursorSize() & "\nXcursor.theme:\t" & CursorTheme & "\n" &
     "*background:\t" & hexOf(t.face) & "\n*foreground:\t" & hexOf(t.text) & "\n" &
     "*faceName:\tFreeSans\n*faceSize:\t" & $fontPoints() & "\n" &
     "XTerm*faceName:\tFreeMono\nXTerm*faceSize:\t" & $(fontPoints() + 1) & "\n" &
@@ -242,8 +363,9 @@ proc startXSettings*(d: Display) =
   let blob = xsettingsBlob(
     [("Xft/DPI", dpiNow() * 1024), ("Xft/Antialias", 1), ("Xft/Hinting", 1),
      ("Net/DoubleClickTime", 500), ("Gtk/DialogsUseHeader", 0), ("Gtk/EnableAnimations", 0),
-     ("Gtk/CursorThemeSize", max(16, devPx(16))), ("Net/EnableEventSounds", 0)],
-    [("Net/ThemeName", ThemeName), ("Gtk/FontName", "FreeSans " & $fontPoints()),
+     ("Gtk/CursorThemeSize", cursorSize()), ("Net/EnableEventSounds", 0),
+     ("Gtk/OverlayScrolling", 0)],
+    [("Net/ThemeName", ThemeName), ("Gtk/CursorThemeName", CursorTheme), ("Gtk/FontName", "FreeSans " & $fontPoints()),
      ("Gtk/MonospaceFontName", "FreeMono " & $(fontPoints() + 1)), ("Xft/HintStyle", "hintslight"),
      ("Xft/RGBA", "none"), ("Gtk/DecorationLayout", "menu:minimize,maximize")])
   let prop = atom(d, "_XSETTINGS_SETTINGS")
@@ -266,6 +388,7 @@ proc startXSettings*(d: Display) =
 proc applyLook*(d: Display) =
   ## Everything above, for the color scheme, fonts and size the settings say.
   let t = schemeTheme(desktopSettings().setting("scheme", "Classic"))
+  installCursors()
   if desktopSettings().setting("linuxLook", "on") == "on":
     installFonts()
     installGtkTheme(t)

@@ -15,6 +15,7 @@ import std/[math, tables, algorithm]
 import retroui
 import retroui/canvas2d
 import retroui/uirelays/drivers/x11_driver
+import retroui/uirelays/screen
 import xlib, common
 
 type
@@ -64,7 +65,6 @@ var
   pressTime: Time
   moved: bool
   fleur: culong
-  cursors: array[Part, culong]
   shownCursor: Table[Window, Part]
   cascadeAt = 0
   menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int]
@@ -777,29 +777,18 @@ proc partAt(c: Client; x, y: int): Part =
     return pS
   pClient
 
-const
-  XC_fleur = 52.cuint
-  XC_left_ptr = 68.cuint
-  XC_sb_h = 108.cuint
-  XC_sb_v = 116.cuint
-  XC_tl = 134.cuint
-  XC_tr = 136.cuint
-  XC_bl = 12.cuint
-  XC_br = 14.cuint
-
+proc cursorScale(): int = max(1, int(round(devScale())))
 
 proc cursorFor(p: Part): culong =
-  if cursors[p] == 0:
-    let shape = case p
-                of pN, pS: XC_sb_v
-                of pW, pE: XC_sb_h
-                of pNW: XC_tl
-                of pNE: XC_tr
-                of pSW: XC_bl
-                of pSE: XC_br
-                else: XC_left_ptr
-    cursors[p] = XCreateFontCursor(dpy, shape)
-  cursors[p]
+  ## The classic cursors (as 3.1 had them), at the screen's scale: the
+  ## arrow, the sizing arrows of the borders and corners.
+  let kind = case p
+             of pN, pS: curSizeNS
+             of pW, pE: curSizeWE
+             of pNW, pSE: curSizeNWSE
+             of pNE, pSW: curSizeNESW
+             else: curArrow
+  culong(x11ClassicCursor(kind, cursorScale()))
 
 proc pressFrame(c: Client; e: XButtonEvent) =
   let part = partAt(c, int(e.x), int(e.y))
@@ -1203,7 +1192,7 @@ proc start*(): bool =
   discard XMoveResizeWindow(dpy, desk, 0, 0, cuint(sw), cuint(sh))
   discard XLowerWindow(dpy, desk)
   grabKeys()
-  fleur = XCreateFontCursor(dpy, XC_fleur)
+  fleur = culong(x11ClassicCursor(curMove, cursorScale()))
   discard XDefineCursor(dpy, root, cursorFor(pNone))
   running = true
   x11EventHook = handle

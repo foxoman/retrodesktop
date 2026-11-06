@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.3
+
+- **Retro Browser** (Program Manager > Main > Web Browser, `retro-desktop
+  browser`): Firefox dressed as a 3.1 program -- gray toolbars, square
+  raised buttons, tabs like 3.1 buttons, a sunken address field, 3.1 menus,
+  the menu bar shown, FreeSans, the desktop's color scheme, no title bar of
+  its own (the desktop's frame). It runs on a profile of its own
+  (`~/.local/share/retrodesktop/browser`): the user's Firefox and its
+  profile stay as they are. Fewer content processes and tabs let go when
+  memory runs short, for phones. Without Firefox it says how to install it.
+- **Cursors in the 3.1 shapes, at the screen's size**: the arrow, the
+  I-beam, the hourglass, the hand, the cross, the sizing arrows -- crisp, a
+  pixel of the drawing a square of the screen's scale. The desktop and its
+  programs draw them (Retro Nim UI 0.20.7); other programs (GTK, Qt,
+  Firefox) get them as the cursor theme "Retro31" (`~/.icons`), at the same
+  size.
+- **Scroll bars always there, with their arrow buttons**, as in 3.1: in GTK
+  programs (the Retro31 theme, no overlay scroll bars) and in Retro
+  Browser.
+- **Program Manager sees programs installed or removed while it runs**
+  (Firefox appears in Internet a few seconds after `pkg install firefox`).
+- Needs Retro Nim UI 0.20.7.
+
 ## 0.1.2
 
 - **A desktop that hangs is replaced.** `retro-desktop` asks the desktop

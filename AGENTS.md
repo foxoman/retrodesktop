@@ -22,6 +22,8 @@ alike.
   - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
     Cardfile), `control.nim`, `tasklist.nim`, `terminal.nim` -- the programs
   - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing
+  - `browser.nim` -- Retro Browser: Firefox's profile with the 3.1
+    userChrome.css, user.js
   - `theming.nim` -- the look given to other programs (XSETTINGS, X
     resources, fontconfig, the GTK theme)
   - `link.nim` -- how the programs talk to the desktop (EWMH messages,

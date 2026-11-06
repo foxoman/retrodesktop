@@ -7,7 +7,8 @@
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
 import std/[os, strutils]
-import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal]
+import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal,
+                     browser]
 
 proc usage() =
   echo DesktopName, " ", DesktopVersion, " -- a Windows 3.1 style desktop"
@@ -17,6 +18,7 @@ proc usage() =
   echo "  retro-desktop control     Control Panel"
   echo "  retro-desktop tasklist    Task List"
   echo "  retro-desktop terminal    Terminal (-e command: runs it in the Terminal)"
+  echo "  retro-desktop browser     Retro Browser (Firefox in the desktop's look)"
   echo "  retro-desktop clock       Clock"
   echo "  retro-desktop calc        Calculator"
   echo "  retro-desktop calendar    Calendar"
@@ -28,6 +30,10 @@ when isMainModule:
   of "", "session", "desktop": runSession()
   of "progman": runProgman()
   of "control": runControl()
+  of "browser":
+    var args: seq[string]
+    for k in 2 .. paramCount(): args.add paramStr(k)
+    runBrowser(args)
   of "terminal":
     # (retro-desktop terminal -e command...: the command, not a shell)
     var args: seq[string]

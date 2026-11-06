@@ -157,6 +157,21 @@ proc drawIcon(c: Canvas2D; kind: string) =
     c.textAlign = "left"
     c.textBaseline = "middle"
     c.fillText("$_", 5, 16)
+  of "browser":
+    # (a globe: the sea, the lands, the lines of a map)
+    c.fillStyle = Navy
+    c.beginPath(); c.arc(16, 16, 13, 0, 2 * PI); c.fill()
+    c.fillStyle = "#0080ff"
+    c.beginPath(); c.arc(16, 16, 12, 0, 2 * PI); c.fill()
+    c.fillStyle = "#00a000"
+    c.beginPath(); c.moveTo(8, 9); c.lineTo(14, 7); c.lineTo(16, 12); c.lineTo(12, 17)
+    c.lineTo(9, 15); c.closePath(); c.fill()
+    c.beginPath(); c.moveTo(18, 15); c.lineTo(24, 13); c.lineTo(26, 19); c.lineTo(21, 26)
+    c.lineTo(18, 22); c.closePath(); c.fill()
+    c.strokeStyle = White
+    c.lineWidth = 0.8
+    c.beginPath(); c.moveTo(4, 16); c.lineTo(28, 16); c.stroke()
+    c.beginPath(); c.arc(16, 16, 12, -PI / 2, PI / 2); c.stroke()
   of "mail":
     box(c, 3, 8, 26, 17, White)
     c.strokeStyle = Black

@@ -33,14 +33,19 @@ one program of about 5 MB, nothing to set up.
 
   ![Terminal](docs/terminal.png)
 
+- **Retro Browser:** Firefox dressed as a 3.1 program -- gray toolbars,
+  square raised buttons, tabs like buttons, a sunken address field, the menu
+  bar, the desktop's colors, scroll bars always there -- on a profile of
+  its own, so your own Firefox stays as it is (`pkg install firefox`).
 - **The accessories:** Clock, Calculator, Calendar (with appointments and
   notes), Cardfile, Task List (Ctrl+Esc: every window and the memory its
   program takes; End Task ends one that hangs), Control Panel.
 - **From Retro Nim UI's examples:** File Manager (Retro Files), Paintbrush
   (Retro Photo), Board (Retro Board), Notepad.
 - **The same look for the other programs.** GTK programs (and Chromium,
-  Electron, Firefox) get the color scheme as a "Retro31" GTK theme, the
-  desktop's fonts (GNU FreeFont) and its size; Qt and older X programs get
+  Electron, Firefox) get the color scheme as a "Retro31" GTK theme with
+  3.1 scroll bars (always there, with arrows), the 3.1 cursors at the
+  screen's size, the desktop's fonts (GNU FreeFont) and its size; Qt and older X programs get
   the size and the fonts. Control Panel changes the scheme, the fonts, the
   text size and the size of everything, and every program of the desktop
   follows at once.
@@ -64,7 +69,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.2_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.3_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -120,6 +125,7 @@ control-menu box to close it.
 
 Every part is also a command: `retro-desktop progman`, `control`,
 `tasklist`, `terminal` (`terminal -e command` runs a command in it),
+`browser` (Retro Browser; pages to open after it),
 `clock`, `calc`, `calendar`, `cardfile`.
 
 ## On a Linux computer
@@ -135,7 +141,7 @@ Xephyr :2 -screen 1280x800 & DISPLAY=:2 retro-desktop
 ## Building it
 
 You need [Nim](https://nim-lang.org) 2.2 or later and
-[Retro Nim UI](https://github.com/foxoman/retroui) 0.20.6 or later.
+[Retro Nim UI](https://github.com/foxoman/retroui) 0.20.7 or later.
 
 ```sh
 nimble install retroui
@@ -157,7 +163,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.2 && git push origin v0.1.2`).
+tag is pushed (`git tag v0.1.3 && git push origin v0.1.3`).
 
 ## How it works
 

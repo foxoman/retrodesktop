@@ -4,12 +4,13 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils, tables, algorithm, math]
+import std/[os, strutils, tables, algorithm, math, times]
 import retroui
 import retroui/[svgimport, imaging]
+import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.2"
+  DesktopVersion* = "0.1.3"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -56,6 +57,8 @@ proc applyDesktopLook*() =
   ## The color scheme, font and text size Control Panel set, for one of the
   ## desktop's own programs.
   let s = desktopSettings()
+  # (the cursors in the classic shapes, at the screen's size)
+  x11DrawnCursors = 1
   ui.theme = schemeTheme(s.setting("scheme", "Classic"))
   case s.setting("font", "sans")
   of "serif": setUiFont(ufSerif)
@@ -276,3 +279,13 @@ proc scaled*(v: int): int =
     pct = if env.len > 0: parseInt(env) else: parseInt(desktopSettings().setting("size", "100"))
   except ValueError: discard
   v * clamp(pct, 50, 300) div 100
+
+proc appsStamp*(): string =
+  ## What changes when a program is installed or removed: the times the
+  ## folders of desktop entries changed, and Program Manager's own items.
+  for d in dataDirs():
+    let dir = d / "applications"
+    try:
+      if dirExists(dir): result.add $getLastModificationTime(dir).toUnix & ";"
+    except CatchableError: discard
+  result.add loadSettings(ProgmanSettings).getOrDefault("items", "").len.`$`
