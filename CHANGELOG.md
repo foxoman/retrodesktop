@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11
+
+- **Communicator 1.1** (Retro Nim UI 0.22.0): voice messages -- the
+  microphone button records with the phone's microphone (Termux:API) and
+  sends it; one that comes plays -- and the history brought in from the
+  server when you sign on (what you said from your phone or another
+  computer), with Earlier messages at the top of a talk.
+- Help: Communicator's page tells of both, in English and in Arabic.
+- Needs Retro Nim UI 0.22.0.
+
 ## 0.1.10
 
 - **Write opens and saves Word documents (.docx)**: its headings, bold,

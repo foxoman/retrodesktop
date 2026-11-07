@@ -104,7 +104,8 @@ one program of about 5 MB, nothing to set up.
   (Retro Photo), Board (Retro Board), Notepad, Mail (Retro Mail: Microsoft
   365, Outlook.com, Gmail) and Communicator (Retro Communicator: chat on
   XMPP -- an account on any public server, made from inside it if you
-  like; friends, groups, rooms, away messages, files).
+  like; friends, groups, rooms, away messages, files, voice messages, and
+  your history brought in from the server when you sign on).
 
   ![Communicator](docs/communicator.png)
 
@@ -164,7 +165,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.10_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.11_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -292,7 +293,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.10 && git push origin v0.1.10`).
+tag is pushed (`git tag v0.1.11 && git push origin v0.1.11`).
 
 ## How it works
 

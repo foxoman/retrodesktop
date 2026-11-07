@@ -447,6 +447,12 @@ one made here.
 * **Add** a friend by their address (name@server); they are asked to accept.
 * **Rooms**: talk with many at once.
 * Send a picture or a file; set your picture, your name, your away message.
+* **Voice messages**: the microphone button records (the phone's microphone,
+  through Termux:API); the button again sends it, Cancel lets it go. One
+  that comes shows **Play**.
+* **Your history follows you**: when you sign on, what was said from your
+  phone or another computer comes in from the server (most servers keep
+  it); **Earlier messages**, at the top of a talk, goes further back.
 
 [Contents](topic:contents)
 """)]
