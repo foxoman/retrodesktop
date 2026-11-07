@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.12
+
+- **Communicator 1.2** (Retro Nim UI 0.23.0): end-to-end encryption with
+  OMEMO, as Conversations, Monal, Gajim and Dino do it -- the lock button in
+  a talk, on by itself when your friend's app has it; files and voice
+  messages locked too; the fingerprints in Info and My Profile.
+- Help: Communicator's page tells how, in English and in Arabic.
+- Needs Retro Nim UI 0.23.0.
+
 ## 0.1.11
 
 - **Communicator 1.1** (Retro Nim UI 0.22.0): voice messages -- the

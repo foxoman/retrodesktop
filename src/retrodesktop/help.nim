@@ -453,6 +453,11 @@ one made here.
 * **Your history follows you**: when you sign on, what was said from your
   phone or another computer comes in from the server (most servers keep
   it); **Earlier messages**, at the top of a talk, goes further back.
+* **Encryption**: the lock button in a talk. It turns on by itself when your
+  friend's app has OMEMO (Conversations, Monal, Gajim, Dino...); the server
+  then carries words it cannot read, and files and voice messages go locked
+  too. Info shows their devices' fingerprints and My Profile yours: compare
+  them side by side, then **Verified**.
 
 [Contents](topic:contents)
 """)]
