@@ -6,12 +6,12 @@
 
 import std/[os, strutils, tables, algorithm, math, times, hashes]
 import retroui
-import retroui/[svgimport, imaging, lang_ar]
+import retroui/[svgimport, imaging, lang_ar, sha2]
 import ar
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.8"
+  DesktopVersion* = "0.1.9"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -101,6 +101,29 @@ proc schemeTheme*(name: string): Theme =
   for t in desktopThemes:
     if cmpIgnoreCase(t.name, name) == 0: return t.theme
   Classic
+
+proc passwordHash*(password, salt: string): string =
+  ## A password kept as "salt:SHA-256 of salt and password" -- never the
+  ## password itself.
+  salt & ":" & toHex(sha256(salt & "\0" & password))
+
+proc newPasswordHash*(password: string): string =
+  ## `passwordHash` with a new salt.
+  var salt = ""
+  try:
+    let f = open("/dev/urandom")
+    var b: array[12, uint8]
+    discard f.readBuffer(addr b[0], b.len)
+    f.close()
+    for x in b: salt.add toHex(int(x), 2).toLowerAscii
+  except CatchableError:
+    salt = $epochTime()
+  passwordHash(password, salt)
+
+proc passwordIs*(kept, password: string): bool =
+  ## Whether `password` is the one `kept` (from `newPasswordHash`).
+  let k = kept.find(':')
+  k > 0 and passwordHash(password, kept[0 ..< k]) == kept
 
 proc nightNow*(s: Settings): bool =
   ## Night colors are on, and it is night now (between the hours Control
@@ -199,9 +222,16 @@ proc launch*(command: string) =
   if command.strip.len == 0: return
   discard execShellCmd("(" & command & ") </dev/null >/dev/null 2>&1 &")
 
+proc selfPath*(): string =
+  ## This program's file. (Linux says "... (deleted)" once the file was
+  ## replaced -- an update installed while the desktop runs -- and the new
+  ## file is where the old one was.)
+  result = getAppFilename()
+  if result.endsWith(" (deleted)"): result.setLen(result.len - " (deleted)".len)
+
 proc selfCommand*(role: string): string =
   ## The command that starts one of the desktop's own programs (`role`).
-  quoteShell(getAppFilename()) & " " & role
+  quoteShell(selfPath()) & " " & role
 
 proc companion*(name: string): string =
   ## One of the programs that come with the desktop (retro-files...): beside

@@ -37,6 +37,12 @@ alike.
     without blocking a frame (Termux:API, apt-get clean...)
   - `ar.nim` -- the desktop's words in Arabic (with retroui's
     `toolkitArabic`; `tr` finds them)
+  - `keyboard.nim` -- the layouts (setxkbmap), the repeat (XKB), the
+    shortcuts' names and keys at first
+  - `syscheck.nim` -- Control Panel's System Check and Backup
+  - `updates.nim` -- a newer release on GitHub (a thread of its own)
+  - `crash.nim` -- the General Protection Fault box: a signal or an
+    uncaught error forks the box, which lets go of the X connection
   - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
     Cardfile), `control.nim`, `tasklist.nim`, `terminal.nim` -- the programs
   - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing
@@ -94,6 +100,10 @@ alike.
    ConfigureNotify), never Xlib's `XDisplayWidth` in the desktop's own
    connection: that one keeps the size the connection began with, and
    Termux:X11 changes it after the start.
+   The program's own file is `selfPath()` (never `getAppFilename()`: after
+   an update it says "... (deleted)"). The manager's key grabs take no
+   owner events, so the keys come to the root even when the desktop's own
+   window has the focus.
    A closure made in a loop (a menu item's action) sees the loop's last
    values: make each one in a proc of its own (`startItem`, `openGroup` in
    panel.nim).

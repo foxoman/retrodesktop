@@ -7,7 +7,7 @@
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
-import std/[os, strutils]
+import std/[os, strutils, sequtils, times]
 import retroui
 import common, link, art, sounds
 
@@ -245,6 +245,16 @@ proc runNotify*(args: seq[string]) =
   if words.len == 0: return
   let title = words[0]
   let body = if words.len > 1: words[1 .. ^1].join(" ") else: ""
+  # (kept for the panel's list: the last 50)
+  try:
+    let file = dataDir(SettingsName) / "notifications"
+    var lines = (if fileExists(file): readFile(file).splitLines else: @[])
+    lines.keepItIf(it.len > 0)
+    lines.add now().format("HH:mm") & "\t" & title.replace("\t", " ").replace("\n", " ") & "\t" &
+              body.replace("\t", " ").replace("\n", " ")
+    if lines.len > 50: lines = lines[^50 .. ^1]
+    writeFile(file, lines.join("\n") & "\n")
+  except CatchableError: discard
   playSound("notify")
   if inTermux() and findExe("termux-notification").len > 0:
     launch("termux-notification --title " & quoteShell(title) & " --content " & quoteShell(body) &

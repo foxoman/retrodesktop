@@ -200,7 +200,7 @@ proc installOpener*() =
     let sh = if fileExists(prefixDir() / "bin/sh"): prefixDir() / "bin/sh" else: "/bin/sh"
     let f = dir / "xdg-open"
     let body = "#!" & sh & "\n# Retro Desktop's: what its programs open goes to its Open.\n" &
-               "exec " & quoteShell(getAppFilename()) & " open \"$@\"\n"
+               "exec " & quoteShell(selfPath()) & " open \"$@\"\n"
     if not fileExists(f) or readFile(f) != body:
       writeFile(f, body)
       setFilePermissions(f, {fpUserRead, fpUserWrite, fpUserExec, fpGroupRead, fpGroupExec,
@@ -208,7 +208,7 @@ proc installOpener*() =
     # (notify-send: the programs' notifications to Android's, or to a box)
     let n = dir / "notify-send"
     let nbody = "#!" & sh & "\n# Retro Desktop's: notifications to Android (Termux:API) or the desktop.\n" &
-                "exec " & quoteShell(getAppFilename()) & " notify \"$@\"\n"
+                "exec " & quoteShell(selfPath()) & " notify \"$@\"\n"
     if not fileExists(n) or readFile(n) != nbody:
       writeFile(n, nbody)
       setFilePermissions(n, {fpUserRead, fpUserWrite, fpUserExec, fpGroupRead, fpGroupExec,

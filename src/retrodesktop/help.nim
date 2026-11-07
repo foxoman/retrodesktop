@@ -15,7 +15,7 @@ const Topics* = [
 Choose a topic:
 
 * [Using the desktop](topic:desktop) -- windows, the mouse and the finger
-* [Keys](topic:keys)
+* [Keys](topic:keys) and [the keyboard](topic:keyboard) -- shortcuts, English and Arabic
 * [Program Manager](topic:progman) and [Setup](topic:setup)
 * [Terminal](topic:terminal) and [Retro Browser](topic:browser)
 * [The panel](topic:panel) and [icons on the desktop](topic:icons)
@@ -29,6 +29,7 @@ Choose a topic:
 * [Minesweeper](topic:mines), [Solitaire](topic:solitaire), [Reversi](topic:reversi)
 * [DOS games](topic:dos)
 * [Android and Termux](topic:android), [Android apps](topic:androidapps)
+* [When a program fails](topic:crash)
 """),
   ("desktop", "Using the desktop", """
 # Using the desktop
@@ -62,10 +63,20 @@ where they were. See also [Keys](topic:keys) and [Contents](topic:contents).
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
 | Ctrl+Esc | the Task List |
+| Win | the panel's Programs menu (Program Manager with the panel off) |
+| Win+R, Win+E, Win+I | Run, File Manager, Control Panel |
+| Win+Left, Win+Right | the window on the left or right half of the screen (again: back) |
+| Win+Up, Win+Down | maximize; restore or minimize |
+| Win+D | every window minimized (again: back) |
+| Win+L | locks the screen (the screen saver; its password when it has one) |
+| Ctrl+Alt+T | Terminal |
+| Ctrl+Shift+Esc | Task List |
+| Alt+Shift | the next keyboard layout (English, Arabic...) |
 | F1 | Help, at the page of the program in front |
 | Android's Back | closes the window in front -- when Control Panel > Windows says so, and Termux:X11 sends it as Back |
 | Ctrl+Shift+C, V | copy and paste in the Terminal |
 
+Control Panel > Keyboard changes the shortcuts: [the keyboard](topic:keyboard).
 [Contents](topic:contents)
 """),
   ("progman", "Program Manager", """
@@ -99,6 +110,11 @@ Underneath it is Termux's apt (what `pkg` runs): it adds x11-repo first
 when a program needs it and reads the lists of programs when they are old.
 When it cannot reach the Internet, `termux-change-repo` in the
 [Terminal](topic:terminal) picks another mirror.
+
+**Updates:** Setup asks GitHub whether a newer Retro Desktop is out; when one
+is, it says so at the top, and **Update Now** downloads it and installs it
+(start the desktop again after). The desktop asks once a week by itself and
+sends a notification.
 
 Programs with windows come into Program Manager by themselves; the
 Terminal's programs (htop, NetHack...) get an item. [Contents](topic:contents)
@@ -187,11 +203,20 @@ answer; Cascade and Tile arrange the windows. [Contents](topic:contents)
   first: Termux:X11 uses Back for its keyboard).
 * **Date/Time**: 12 or 24 hours, the time zone.
 * **Sound**: which chime goes with which event.
-* **Screen Saver**: after a delay with nothing done.
+* **Screen Saver**: after a delay with nothing done; **Password protected**
+  asks for a password before it ends (Win+L starts it now).
 * **Linux Programs**: the look given to other programs; 3D through
   Android's GPU (VirGL).
 * **International**: the desktop's programs in English or in Arabic (right
-  to left). [Contents](topic:contents)
+  to left).
+* **Keyboard**: the layouts and the key that switches them, the shortcuts,
+  how fast a held key repeats: [the keyboard](topic:keyboard).
+* **System Check**: what the desktop's programs need -- Termux:API, the
+  sound, mpv, x11vnc, the layouts, VirGL, the phone's storage -- and whether it
+  is there, with **Install** for what is missing.
+* **Backup**: the settings, Program Manager's groups, the desktop's icons and
+  your fonts in one .zip in your downloads; **Restore** puts one back.
+  [Contents](topic:contents)
 """),
   ("mines", "Minesweeper", """
 # Minesweeper
@@ -264,8 +289,10 @@ A bar along the bottom of the screen -- 3.1 had none: it came with Windows
   Run, Help, Control Panel, Task List, Exit.
 * A **button for each window**: a click brings it to the front, a click on the
   one in front minimizes it; a right click opens its control menu.
-* At the right: the battery (on a phone, a laptop) and the clock; a click on
-  the clock opens Clock.
+* At the right, the tray: the **keyboard's layout** (EN, ع: a click goes
+  to the next), the **volume** (a click for its menu, the wheel up and down),
+  **Wi-Fi**, the **notifications** (a bell; a click lists the last ones), the
+  battery and the clock (a click opens Clock).
 
 Control Panel > Windows turns it off: the windows minimized are icons at the
 bottom of the desktop again, as in 3.1. [Contents](topic:contents)
@@ -363,6 +390,43 @@ password and **Share**. On the computer, a VNC viewer (TigerVNC, RealVNC,
 Remmina...) connects to the address shown. **Stop Sharing** ends it. Anyone
 on the network with the password can see and use the desktop while it is
 shared. [Contents](topic:contents)
+"""),
+  ("keyboard", "The keyboard", """
+# The keyboard
+
+**Shortcuts.** The Windows key alone opens the Programs menu; with a key it
+does more -- the list is in [Keys](topic:keys). Control Panel > Keyboard >
+Shortcuts changes them: choose one, **Change**, then the keys.
+
+**English and Arabic.** Control Panel > Keyboard > Layouts: check the layouts
+to type in (English, Arabic, French...) and the keys that switch them
+(Alt+Shift at first). The panel shows the one typing now; a click on it goes
+to the next. More than one needs Setup > System > Keyboard layouts.
+
+**Repeat.** How long a held key waits, and how fast it repeats then.
+
+**In Termux:X11's preferences** (with a keyboard of its own):
+
+* Keyboard > **Enable Accessibility service for intercepting system
+  shortcuts manually**: it opens Android's Accessibility settings; turn on
+  Termux:X11's service there. Then Alt+Tab, the Windows key and Ctrl+Esc come
+  to the desktop instead of Android. (On Samsung DeX: **Intercept system
+  shortcuts**.) Leave **Filter out intercepted Win key** off.
+* Keyboard > **Prefer scancodes when possible**: the layouts type right
+  (Arabic too).
+* Other > **Clipboard sharing** (on at first): what you copy here can be
+  pasted in Android's apps, and the other way. (Clipboard Viewer can also get
+  or send it, through Termux:API.)
+
+[Contents](topic:contents)
+"""),
+  ("crash", "When a program fails", """
+# When a program fails
+
+When one of the desktop's own programs fails, its window goes and a
+**General Protection Fault** box comes, as in 3.1: **Restart** opens it again,
+**Details** shows what went wrong, **Copy Details** takes it for a report. All
+of it is kept in ~/.local/share/retrodesktop/crashes.log. [Contents](topic:contents)
 """),
   ("communicator", "Communicator", """
 # Communicator

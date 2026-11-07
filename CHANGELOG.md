@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.1.9
+
+- **The keyboard's shortcuts**, Windows-style: the Windows key alone opens
+  Programs; Win+R Run, Win+E File Manager, Win+I Control Panel, Win+D the
+  desktop (and back), Win+Left and Win+Right a window on half the screen,
+  Win+Up maximize, Win+Down restore or minimize, Win+L lock, Ctrl+Alt+T
+  Terminal, Ctrl+Shift+Esc Task List. Control Panel > Keyboard changes them.
+- **English and Arabic typing**: Control Panel > Keyboard > Layouts (Arabic,
+  French, German... and the key that switches: Alt+Shift at first); the
+  panel shows EN or ع, a click on it switches. Through setxkbmap (Setup >
+  System > Keyboard layouts). How fast a held key repeats, there too.
+- **The panel's tray**: the layout, the volume (PulseAudio: a menu, the
+  wheel), Wi-Fi, the notifications (a bell with how many came; a click lists
+  them), the battery, the clock.
+- **The screen saver's password** (Control Panel > Screen Saver > Password
+  protected; Win+L locks now): asked before it ends, the keyboard and the
+  pointer held meanwhile.
+- **System Check** in Control Panel: Termux:API (its tools and its app), the
+  sound, mpv, x11vnc, the layouts, VirGL, the phone's storage, Android's
+  limit on programs, Termux:X11's keyboard settings, memory, storage -- with
+  Install for what is missing.
+- **Backup** in Control Panel: the settings, Program Manager's groups, the
+  desktop's icons, the programs' settings (never passwords) and your fonts
+  in one .zip in your downloads; Restore puts one back.
+- **Updates**: Setup asks GitHub for a newer Retro Desktop and installs it
+  (Update Now); the desktop asks once a week and sends a notification.
+- **A General Protection Fault box** when one of the desktop's programs
+  fails: Restart, Details, Copy Details (kept in crashes.log).
+- Fix: once the program's file was replaced (an update installed while the
+  desktop runs), the desktop could not start its own programs any more
+  (Linux names the old file "... (deleted)").
+- Fix: shortcuts reach the desktop when its own window has the focus.
+- Help: a page for the keyboard (with Termux:X11's own settings for a
+  keyboard: the Accessibility service for system shortcuts, Prefer scancodes,
+  Clipboard sharing) and one for the box; Keys lists the shortcuts.
+- GitHub takes screenshots on every push (the run's "screenshots").
+
 ## 0.1.8
 
 - **Pictures in the panel's menus**: Programs shows each group with its

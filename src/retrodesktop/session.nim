@@ -9,7 +9,8 @@
 import std/[os, strutils, tables, math, times, posix]
 import retroui
 import retroui/uirelays/drivers/x11_driver
-import xlib, common, theming, wm, link, art, boxes, opener, saver, sounds, panel, deskicons, catalog
+import xlib, common, theming, wm, link, art, boxes, opener, saver, sounds, panel, deskicons, catalog, keyboard,
+       updates
 
 var
   conf: Settings
@@ -43,6 +44,14 @@ proc phoneScreen(): bool =
 proc readSettings() =
   conf = desktopSettings()
   applyDesktopLook()
+  # (the keyboard's shortcuts, as Control Panel > Keyboard set them)
+  var keys: seq[(string, string)]
+  for (action, keysAtFirst) in DefaultShortcuts:
+    keys.add (action, conf.setting("key." & action, keysAtFirst))
+  wm.setShortcuts(keys)
+  # (the layouts and how keys repeat)
+  applyLayouts(conf)
+  applyRepeat(Display(x11Display()), conf)
   deskColor = hexColor(conf.setting("desktopColor", Teal), color(0, 128, 128))
   patternName = conf.setting("pattern", "(None)")
   wallPath = conf.setting("wallpaper", "")
@@ -66,6 +75,7 @@ proc readSettings() =
 proc useGpu()
 
 var schemeNow = ""               # the color scheme in use (night colors change it)
+var saverOn = false
 
 proc relook() =
   ## The settings changed (Control Panel): the desktop, its frames and the
@@ -75,7 +85,7 @@ proc relook() =
   useGpu()
   if managing:
     showPanel(conf.setting("panel", "on") != "off")
-    panelSettings(true, conf.setting("clock24", "on") != "off")
+    panelSettings(true, conf.setting("clock24", "on") != "off", layoutsOf(conf))
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -120,7 +130,7 @@ proc commandOf(c: Client): string =
   var quoted: seq[string]
   for a in args: quoted.add quoteShell(a)
   if args.len == 0: result = ""
-  elif args[0].extractFilename == "retro-desktop" or args[0] == getAppFilename():
+  elif args[0].extractFilename == "retro-desktop" or args[0] == selfPath():
     result = if args.len < 2 or args[1] in NotAgain: "" else: selfCommand(quoted[1 .. ^1].join(" "))
   else: result = quoted.join(" ")
   commands[c.pid] = result
@@ -273,6 +283,29 @@ proc openTaskList() {.nimcall.} =
   let w = findWindow("Task List")
   if w != 0: activate(w)
   else: launch(selfCommand("tasklist"))
+
+proc openOrStart(title, role: string) =
+  let w = findWindow(title)
+  if w != 0: activate(w)
+  else: launch(selfCommand(role))
+
+proc onShortcut(action: string) {.nimcall.} =
+  ## The keyboard's shortcuts that are the desktop's (the windows' own --
+  ## halves, maximize, minimize, the desktop shown -- the manager does).
+  case action
+  of "programs":
+    if conf.setting("panel", "on") != "off": programsMenu()
+    else: openOrStart("Program Manager", "progman")
+  of "run": launch(selfCommand("run"))
+  of "files": launch(selfCommand("open") & " " & quoteShell(getHomeDir()))
+  of "terminal": launch(selfCommand("terminal"))
+  of "tasklist": openTaskList()
+  of "control": openOrStart("Control Panel", "control")
+  of "lock":
+    # (the screen saver now; with a password Control Panel set, it asks it)
+    saverOn = true
+    launch(selfCommand("saver") & " now")
+  else: discard
 
 # ---- drawing the desktop ----------------------------------------------------------------------------
 
@@ -481,7 +514,26 @@ proc dialogs() =
 
 # ---- the screen saver ----------------------------------------------------------------------------------
 
-var saverOn = false
+
+var updateSaid = false
+
+proc watchUpdates() =
+  ## Once a week GitHub is asked whether a newer Retro Desktop is out; when
+  ## one is, a notification says so (Setup installs it).
+  if updateSaid: return
+  let last = conf.setting("updateChecked", "")
+  let today = now().format("yyyy-MM-dd")
+  if last.len == 0 or (try: (now() - parse(last, "yyyy-MM-dd")).inDays >= 7 except CatchableError: true):
+    checkForUpdate()
+    let (asked, up) = updateFound()
+    if not asked: return
+    updateSaid = true
+    var s = desktopSettings()
+    s["updateChecked"] = today
+    saveDesktopSettings(s)
+    if up.version.len > 0:
+      launch(selfCommand("notify") & " " & quoteShell(DesktopName & " " & up.version & " is out") & " " &
+             quoteShell("Setup (in Main) updates it."))
 
 proc watchIdle() =
   ## The screen saver Control Panel chose, once nothing was done for its delay.
@@ -628,6 +680,8 @@ proc runSession*() =
   watchMemory()
   wm.changed = nil
   wm.taskList = openTaskList
+  wm.shortcut = onShortcut
+  wm.keyboardChanged = proc () {.nimcall.} = drawPanel()
   wm.command = onCommand
   wm.sound = proc (event: string) {.nimcall.} = playSound(event, conf)
   wm.pausedFile = dataDir(SettingsName) / "paused"
@@ -644,7 +698,7 @@ proc runSession*() =
   if not managing: showNoWm = true
   else:
     showPanel(conf.setting("panel", "on") != "off")
-    panelSettings(true, conf.setting("clock24", "on") != "off")
+    panelSettings(true, conf.setting("clock24", "on") != "off", layoutsOf(conf))
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -684,6 +738,7 @@ proc runSession*() =
       if started: keepSession()
       watchIdle()
       panelTick()
+      watchUpdates()
       # (night colors: the night's scheme from its hour, the day's after)
       if currentScheme(conf) != schemeNow: relook()
       wakeIn(5000)

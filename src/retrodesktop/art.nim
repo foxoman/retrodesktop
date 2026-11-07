@@ -560,6 +560,41 @@ proc drawIcon(c: Canvas2D; kind: string) =
     c.textBaseline = "middle"
     c.fillText("A", 9.5, 13.8)
     c.fillText("ع", 22.5, 18.5)
+  of "keyboard":
+    # (a keyboard of the time: its keys in rows)
+    box(c, 1, 9, 30, 15, Gray)
+    c.fillStyle = White
+    for r in 0 .. 2:
+      for k in 0 .. 8:
+        c.fillRect(3 + float(k) * 3.1 + float(r), 11 + float(r) * 3.6, 2.4, 2.6)
+    c.fillRect(8, 21.5, 15, 1.8)
+    c.strokeStyle = Black
+    c.lineWidth = 1
+    c.beginPath(); c.moveTo(16, 9); c.bezierCurveTo(16, 5, 22, 6, 22, 2); c.stroke()
+  of "syscheck":
+    # (a screen, and the check mark over it)
+    box(c, 3, 4, 22, 17, Gray)
+    c.fillStyle = Navy
+    c.fillRect(5, 6, 18, 13)
+    box(c, 9, 22, 10, 3, Gray)
+    box(c, 6, 25, 16, 3, Gray)
+    c.strokeStyle = "#00a000"
+    c.lineWidth = 3.5
+    c.beginPath(); c.moveTo(15, 18); c.lineTo(21, 25); c.lineTo(31, 9); c.stroke()
+  of "backup":
+    # (a box of floppies, and the arrow in)
+    box(c, 4, 12, 24, 17, "#c08040")
+    c.fillStyle = "#804000"
+    c.fillRect(4, 12, 24, 3)
+    for k in 0 .. 2:
+      box(c, 7 + float(k) * 6, 6 + float(k), 7, 8, Navy)
+      c.fillStyle = Gray
+      c.fillRect(8.5 + float(k) * 6, 6.5 + float(k), 4, 2.5)
+    c.strokeStyle = Red
+    c.lineWidth = 2.5
+    c.beginPath(); c.moveTo(26, 1); c.lineTo(26, 9); c.stroke()
+    c.fillStyle = Red
+    c.beginPath(); c.moveTo(22, 8); c.lineTo(30, 8); c.lineTo(26, 12); c.closePath(); c.fill()
   of "exit":
     # (a door, open, and the way out)
     box(c, 5, 3, 16, 26, "#804000")

@@ -4,7 +4,9 @@ name: Termux package
 # (retro-desktop_<version>_aarch64.deb), cross-built with the Android NDK
 # the runner has, with the programs from Retro Nim UI's examples. A quick
 # check of the desktop runs on Linux first (on Xvfb: it manages an X
-# program's window, opens its own programs; the screen is kept).
+# program's window, opens its own programs; the screen is kept), and
+# screenshots are taken (the panel's menu, the accessories, Control Panel,
+# Help: the run's "screenshots").
 #
 # It runs on every push and pull request (the package as the run's
 # artifact) and puts the package on the release when a version tag is
@@ -33,7 +35,7 @@ jobs:
       - name: Retro Nim UI
         run: git clone --depth 1 --branch "$RETROUI_REF" https://github.com/foxoman/retroui build/retroui
       - name: X tools
-        run: sudo apt-get update && sudo apt-get install -y xvfb x11-apps x11-utils imagemagick
+        run: sudo apt-get update && sudo apt-get install -y xvfb x11-apps x11-utils xdotool imagemagick
       - name: Build
         run: nim c -d:release --hints:off --path:build/retroui/src -o:bin/retro-desktop src/retrodesktop.nim
       - name: Smoke test
@@ -43,6 +45,13 @@ jobs:
         with:
           name: smoke-screen
           path: build/smoke.png
+      - name: Screenshots
+        run: sh tools/screens.sh bin/retro-desktop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: build/screens/*.png
 
   termux:
     needs: check

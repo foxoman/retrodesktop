@@ -132,6 +132,19 @@ one program of about 5 MB, nothing to set up.
   Windows): no CPU, no battery, until you bring them back. OpenGL programs
   can draw on Android's GPU (Setup > System > 3D graphics: VirGL; the
   desktop starts its server).
+- **The keyboard:** the Windows key opens Programs; Win+R, Win+E, Win+D,
+  Win+L, Win+arrows (half the screen, maximize, minimize), Ctrl+Alt+T,
+  Ctrl+Shift+Esc -- Control Panel > Keyboard changes them. English and
+  Arabic (or other layouts) with Alt+Shift, the panel showing EN or ع; how
+  fast a key repeats.
+- **The panel's tray:** the layout, the volume, Wi-Fi, the notifications
+  (a bell; a click lists them), the battery, the clock.
+- **Looking after it:** Control Panel's System Check says what the
+  programs need and whether it is there (Install for what is missing);
+  Backup keeps the settings, groups, icons and fonts in one .zip, Restore
+  puts them back; Setup installs a newer Retro Desktop from GitHub (the
+  desktop says when one is out); a screen-saver password (Win+L locks); a
+  3.1 General Protection Fault box when one of its programs fails.
 - **Android:** Main > Android Files shows the phone's photos, downloads
   and documents (it asks Android the first time); Android's Back can close
   the window in front (Control Panel > Windows; off at first, because
@@ -150,7 +163,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.8_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.9_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -180,13 +193,19 @@ Android stops programs it thinks you do not use. For a desktop that stays:
   (a pointer you move).
 - *Show additional keyboard:* Esc, Ctrl, Alt, Tab -- for Alt+Tab and the rest.
 - *Fullscreen on device display* and *Hide display cutout*, for all of the screen.
+- With a keyboard: Keyboard > *Enable Accessibility service for intercepting
+  system shortcuts manually* (then turn on Termux:X11's service), so the
+  Windows key and Alt+Tab reach the desktop; *Prefer scancodes when
+  possible*, so other layouts (Arabic) type right. Other > *Clipboard
+  sharing* (on at first) shares the clipboard with Android.
 
 ### When something goes wrong
 
 Start `retro-desktop` again: a desktop that stopped answering is ended and
 the new one takes its windows. What went wrong is in
-`~/.local/share/retrodesktop/desktop.log` -- send me that file with the
-issue. `pkill retro-desktop` ends the desktop and all its programs.
+`~/.local/share/retrodesktop/desktop.log`, and a program's failure in
+`crashes.log` beside it (its box's Copy Details takes it too) -- send me
+that with the issue. Control Panel > System Check shows what is missing. `pkill retro-desktop` ends the desktop and all its programs.
 
 ## Using it
 
@@ -196,7 +215,15 @@ issue. `pkill retro-desktop` ends the desktop and all its programs.
 | Alt+Shift+Tab | the other way |
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
-| Ctrl+Esc | Task List |
+| Ctrl+Esc, Ctrl+Shift+Esc | Task List |
+| Win | the panel's Programs menu |
+| Win+R, Win+E, Win+I | Run, File Manager, Control Panel |
+| Win+Left, Win+Right | the window on half the screen (again: back) |
+| Win+Up, Win+Down | maximize; restore or minimize |
+| Win+D | every window minimized (again: back) |
+| Win+L | lock the screen |
+| Ctrl+Alt+T | Terminal |
+| Alt+Shift | the next keyboard layout |
 | F1 | Help, at the page of the program in front |
 | Android's Back | closes the window in front (when Control Panel > Windows says so) |
 | Ctrl+Shift+C, Ctrl+Shift+V | copy and paste in the Terminal |
@@ -220,7 +247,7 @@ link, in its program), `clipboard`, `mines`, `solitaire`, `reversi`,
 (as `notify-send`), `sound` (an event's sound), `clock`, `calc`, `calendar`,
 `cardfile`, `charmap`, `pictures` (pictures or a folder after it), `pdf`
 (a PDF after it), `media` (songs or videos after it), `recorder`, `camera`,
-`dialer`, `news`, `diskspace`, `share`.
+`dialer`, `news`, `diskspace`, `share`, `crash` (the box, for a role).
 
 ## On a Linux computer
 
@@ -264,7 +291,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.8 && git push origin v0.1.8`).
+tag is pushed (`git tag v0.1.9 && git push origin v0.1.9`).
 
 ## How it works
 

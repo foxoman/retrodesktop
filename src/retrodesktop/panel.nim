@@ -3,8 +3,12 @@
 ## the Programs button (every group of Program Manager, and Run, Help,
 ## Control Panel, Exit); then a button for each window (the one in front
 ## pressed in; a click brings it, or minimizes it when it is in front; a
-## right click its control menu); at its right the battery (Termux:API, or
-## the computer's own) and the clock. Maximized windows stop above it.
+## right click its control menu); at its right the tray: the keyboard's
+## layout (EN, ع: a click goes to the next), the volume (PulseAudio: a click
+## for its menu, the wheel up and down), Wi-Fi (Termux:API, or the
+## computer's own), the notifications (a click lists them), the battery
+## (Termux:API, or the computer's own) and the clock. Maximized windows stop
+## above it.
 ##
 ## The panel is a window of the window manager's (on the desktop's X
 ## connection), kept over the programs' windows but a full-screen one.
@@ -14,7 +18,7 @@
 import std/[os, osproc, strutils, json, times, math, streams, tables]
 import retroui
 import retroui/canvas2d
-import xlib, common, wm, art, catalog
+import xlib, common, wm, art, catalog, keyboard, tasks
 
 var
   panelWin*: Window
@@ -30,6 +34,98 @@ var
   minuteShown = -1
   pressedOn = -2                 ## the button held (-1 Programs)
   menuPics: Table[string, Bitmap]  ## the menus' pictures, at their size
+
+type TrayKind = enum tkLayout, tkVolume, tkWifi, tkNotes, tkBattery, tkClock
+
+var
+  tray: seq[tuple[kind: TrayKind; x, w: int]]   ## what is where in the tray
+  layouts: seq[string]           ## the keyboard's layouts ("us", "ara")
+  volume = -1                    ## the speakers' volume, % (-1 not known)
+  muted = false
+  volumeJob: Task
+  volumeAt = 0.0
+  wifiName = ""                  ## the Wi-Fi network ("" none known)
+  wifiLevel = -1                 ## its strength, 0 to 4 (-1 no Wi-Fi known)
+  wifiJob: Task
+  wifiAt = 0.0
+  notesSeen = 0                  ## the notifications when the list was last opened
+  notesCount = 0
+  notesStamp: times.Time
+
+proc drawPanel*()
+
+proc notesFile*(): string = dataDir(SettingsName) / "notifications"
+
+proc readNotes(): seq[tuple[at, title, body: string]] =
+  ## The notifications kept (the newest last): when, what, its words.
+  try:
+    for line in readFile(notesFile()).splitLines:
+      let f = line.split('\t')
+      if f.len >= 2: result.add (f[0], f[1], (if f.len > 2: f[2] else: ""))
+  except CatchableError: discard
+
+proc readVolume() =
+  ## PulseAudio's volume and mute (in the background).
+  if volumeJob != nil:
+    if not volumeJob.check(): return
+    let o = volumeJob.output
+    let k = o.find('%')
+    if k > 0:
+      var j = k - 1
+      while j > 0 and o[j - 1] in Digits: dec j
+      try: volume = parseInt(o[j ..< k]) except ValueError: discard
+    muted = "Mute: yes" in o or "Mute: ja" in o
+    volumeJob = nil
+    drawPanel()
+  elif findExe("pactl").len > 0 and epochTime() - volumeAt > 30:
+    volumeAt = epochTime()
+    volumeJob = run("pactl get-sink-volume @DEFAULT_SINK@; pactl get-sink-mute @DEFAULT_SINK@")
+
+proc setVolume(cmd: string) =
+  launch("pactl " & cmd)
+  volumeAt = 0
+  volumeJob = nil
+  readVolume()
+
+proc readWifi() =
+  ## The Wi-Fi network and its strength: the computer's own (/proc), else
+  ## Termux:API's (every two minutes, in the background).
+  if fileExists("/proc/net/wireless"):
+    try:
+      for line in readFile("/proc/net/wireless").splitLines[2 .. ^1]:
+        let f = line.splitWhitespace
+        if f.len > 2:
+          let q = parseFloat(f[2].strip(chars = {'.'}))
+          wifiLevel = clamp(int(q / 70.0 * 4.0 + 0.5), 0, 4)
+          wifiName = f[0].strip(chars = {':'})
+          return
+    except CatchableError: discard
+  if wifiJob != nil:
+    if not wifiJob.check(): return
+    try:
+      let j = parseJson(wifiJob.output)
+      if j{"supplicant_state"}.getStr == "COMPLETED":
+        wifiName = j{"ssid"}.getStr.strip(chars = {'"'})
+        let rssi = j{"rssi"}.getInt(-100)
+        wifiLevel = clamp((rssi + 100) div 12, 0, 4)
+      else:
+        wifiName = ""
+        wifiLevel = -1
+    except CatchableError: discard
+    wifiJob = nil
+    drawPanel()
+  elif inTermux() and findExe("termux-wifi-connectioninfo").len > 0 and epochTime() - wifiAt > 120:
+    wifiAt = epochTime()
+    wifiJob = run("termux-wifi-connectioninfo")
+
+proc readNotesCount() =
+  try:
+    let t = getLastModificationTime(notesFile())
+    if t != notesStamp:
+      notesStamp = t
+      notesCount = readNotes().len
+      drawPanel()
+  except CatchableError: discard
 
 proc pic(art: string; icon = ""): Bitmap =
   ## A menu item's picture: the program's own icon (an icon theme's, or a
@@ -116,23 +212,97 @@ proc drawPanel*() =
   if logo != nil: cv.drawImage(logo, float(pad + dpx(4)), float(pad + 1 + (bh - isz) div 2))
   cv.fillStyle = t.text
   cv.fillText(label, float(pad + isz + dpx(9)), float(pad + 1 + bh div 2))
-  # the tray: the battery and the clock, sunken
+  # the tray, sunken: the layout, the volume, Wi-Fi, the notifications,
+  # the battery, the clock (what is not known is left out)
   cv.font = $px & "px sans-serif"
   let n = now()
-  var tray = ""
-  if battery.len > 0: tray = (if charging: "+" else: "") & battery & "   "
-  if hasClock: tray &= n.format(if h24: "HH:mm" else: "h:mm tt")
-  let trayW = int(cv.measureText(tray).width) + dpx(16)
+  let g = isz                       # (a glyph's size)
+  let mid = float(pad + 1 + bh div 2)
+  var items: seq[tuple[kind: TrayKind; w: int]]
+  if layouts.len > 1:
+    items.add (tkLayout, int(cv.measureText(markOf(layouts[clamp(currentGroup(dpy), 0, layouts.high)])).width) + dpx(10))
+  if volume >= 0: items.add (tkVolume, g + dpx(4))
+  if wifiLevel >= 0: items.add (tkWifi, g + dpx(2))
+  if notesCount > 0: items.add (tkNotes, g + dpx(2))
+  if battery.len > 0: items.add (tkBattery, int(cv.measureText((if charging: "+" else: "") & battery).width))
+  if hasClock: items.add (tkClock, int(cv.measureText(n.format(if h24: "HH:mm" else: "h:mm tt")).width))
+  var trayW = dpx(8)
+  for it in items: trayW += it.w + dpx(8)
   trayX = sw - pad - trayW
-  if tray.len > 0:
+  tray = @[]
+  if items.len > 0:
     cv.fillStyle = t.shadow
     cv.fillRect(float(trayX), float(pad + 1), float(trayW), 1)
     cv.fillRect(float(trayX), float(pad + 1), 1, float(bh))
     cv.fillStyle = t.light
     cv.fillRect(float(trayX), float(pad + bh), float(trayW), 1)
     cv.fillRect(float(trayX + trayW - 1), float(pad + 1), 1, float(bh))
-    cv.fillStyle = t.text
-    cv.fillText(tray, float(trayX + dpx(8)), float(pad + 1 + bh div 2))
+    var x = trayX + dpx(8)
+    let gy = float(pad + 1 + (bh - g) div 2)
+    for it in items:
+      cv.fillStyle = t.text
+      cv.strokeStyle = t.text
+      case it.kind
+      of tkLayout:
+        let mark = markOf(layouts[clamp(currentGroup(dpy), 0, layouts.high)])
+        cv.font = "bold " & $px & "px sans-serif"
+        cv.fillStyle = t.select
+        cv.fillRect(float(x), gy, float(it.w), float(g))
+        cv.fillStyle = t.selectText
+        cv.textAlign = "center"
+        cv.fillText(mark, float(x + it.w div 2), mid)
+        cv.textAlign = "left"
+        cv.font = $px & "px sans-serif"
+      of tkVolume:
+        # (a speaker; its waves, or a cross when muted)
+        let u = float(g) / 16
+        cv.beginPath()
+        cv.moveTo(float(x) + 1 * u, gy + 6 * u); cv.lineTo(float(x) + 4 * u, gy + 6 * u)
+        cv.lineTo(float(x) + 8 * u, gy + 2 * u); cv.lineTo(float(x) + 8 * u, gy + 14 * u)
+        cv.lineTo(float(x) + 4 * u, gy + 10 * u); cv.lineTo(float(x) + 1 * u, gy + 10 * u)
+        cv.closePath(); cv.fill()
+        cv.lineWidth = max(1.0, u * 1.3)
+        if muted or volume == 0:
+          cv.strokeStyle = "#c00000"
+          cv.beginPath(); cv.moveTo(float(x) + 10 * u, gy + 5 * u); cv.lineTo(float(x) + 15 * u, gy + 11 * u); cv.stroke()
+          cv.beginPath(); cv.moveTo(float(x) + 15 * u, gy + 5 * u); cv.lineTo(float(x) + 10 * u, gy + 11 * u); cv.stroke()
+        else:
+          for k in 1 .. (if volume > 66: 3 elif volume > 33: 2 else: 1):
+            cv.beginPath()
+            cv.arc(float(x) + 8 * u, gy + 8 * u, float(k) * 2.6 * u, -0.9, 0.9)
+            cv.stroke()
+      of tkWifi:
+        for k in 0 .. 3:
+          let bhk = float(g) * float(k + 1) / 4
+          cv.fillStyle = (if k < wifiLevel: t.text else: t.shadow)
+          cv.fillRect(float(x) + float(k) * float(g) / 4, gy + float(g) - bhk, float(g) / 4 - 1, bhk)
+      of tkNotes:
+        # (a bell; how many came since the list was opened)
+        let u = float(g) / 16
+        cv.fillStyle = t.text
+        cv.beginPath()
+        cv.moveTo(float(x) + 3 * u, gy + 12 * u)
+        cv.bezierCurveTo(float(x) + 4 * u, gy + 9 * u, float(x) + 3 * u, gy + 2 * u, float(x) + 8 * u, gy + 2 * u)
+        cv.bezierCurveTo(float(x) + 13 * u, gy + 2 * u, float(x) + 12 * u, gy + 9 * u, float(x) + 13 * u, gy + 12 * u)
+        cv.closePath(); cv.fill()
+        cv.fillRect(float(x) + 2 * u, gy + 12 * u, 12 * u, 1.5 * u)
+        cv.beginPath(); cv.arc(float(x) + 8 * u, gy + 14.5 * u, 1.6 * u, 0, 2 * PI); cv.fill()
+        let fresh = notesCount - notesSeen
+        if fresh > 0:
+          cv.fillStyle = "#c00000"
+          cv.beginPath(); cv.arc(float(x) + 13 * u, gy + 4 * u, 4 * u, 0, 2 * PI); cv.fill()
+          cv.fillStyle = "#ffffff"
+          cv.font = "bold " & $max(7, int(6 * u)) & "px sans-serif"
+          cv.textAlign = "center"
+          cv.fillText((if fresh > 9: "9+" else: $fresh), float(x) + 13 * u, gy + 4.3 * u)
+          cv.textAlign = "left"
+          cv.font = $px & "px sans-serif"
+      of tkBattery:
+        cv.fillText((if charging: "+" else: "") & battery, float(x), mid)
+      of tkClock:
+        cv.fillText(n.format(if h24: "HH:mm" else: "h:mm tt"), float(x), mid)
+      tray.add (it.kind, x - dpx(4), it.w + dpx(8))
+      x += it.w + dpx(8)
   # the windows: a button each, in the order they were opened
   buttons = @[]
   var list: seq[Client]
@@ -216,6 +386,64 @@ proc buttonAt(x: int): int =
     if x >= b.x and x < b.x + b.w: return i
   -2
 
+proc trayMenu(list: seq[MenuItem]; x: int) =
+  let (_, sh) = screenSize()
+  showMenu(list, x, sh - panelHeight(), above = true)
+
+proc volumeItem(label: string; cmd: string): MenuItem =
+  menuItem(label, "", true, proc () = setVolume(cmd))
+
+proc trayClick(x, button: int) =
+  ## A click (or the wheel) on the tray.
+  var kind = tkClock
+  var at = -1
+  for it in tray:
+    if x >= it.x and x < it.x + it.w:
+      kind = it.kind
+      at = it.x
+  if at < 0: return
+  case kind
+  of tkLayout: nextLayout(dpy, layouts.len)
+  of tkVolume:
+    if button == 4: setVolume("set-sink-volume @DEFAULT_SINK@ +5%")
+    elif button == 5: setVolume("set-sink-volume @DEFAULT_SINK@ -5%")
+    else:
+      var list = @[menuItem((if muted: "&Sound On" else: "&Mute"), "", true, (proc () =
+        setVolume("set-sink-mute @DEFAULT_SINK@ toggle"))), menuLine()]
+      for v in [100, 75, 50, 25, 10]:
+        list.add volumeItem("&" & $v & " %" & (if volume == v: "  *" else: ""),
+                            "set-sink-volume @DEFAULT_SINK@ " & $v & "%")
+      if findExe("pavucontrol").len > 0:
+        list.add menuLine()
+        list.add menuItem("&Volume Control...", "", true, proc () = launch("pavucontrol"))
+      trayMenu(list, at)
+  of tkWifi:
+    var list = @[menuItem((if wifiName.len > 0: wifiName else: "Wi-Fi") & "  (" & $wifiLevel & "/4)", "", false, nil),
+                 menuLine()]
+    if inTermux():
+      list.add menuItem("&Wi-Fi Settings...", "", true, proc () =
+        launch("am start -a android.settings.WIFI_SETTINGS >/dev/null 2>&1"))
+    trayMenu(list, at)
+  of tkNotes:
+    let notes = readNotes()
+    var list: seq[MenuItem]
+    for k in countdown(notes.high, max(0, notes.len - 10)):
+      let it = notes[k]
+      var line = it.title & (if it.body.len > 0: " -- " & it.body else: "")
+      if line.len > 70: line = line[0 ..< 67] & "..."
+      list.add menuItem(line.replace("&", "&&"), it.at, true, nil)
+    list.add menuLine()
+    list.add menuItem("&Clear All", "", true, proc () =
+      try: removeFile(notesFile()) except CatchableError: discard
+      notesCount = 0
+      notesSeen = 0
+      drawPanel())
+    notesSeen = notesCount
+    trayMenu(list, at)
+  of tkBattery:
+    if inTermux(): launch("am start -a android.intent.action.POWER_USAGE_SUMMARY >/dev/null 2>&1")
+  of tkClock: launch(selfCommand("clock"))
+
 proc panelEvents(p: pointer): bool {.nimcall.} =
   let e = cast[ptr XEvent](p)
   case e.theType
@@ -243,7 +471,7 @@ proc panelEvents(p: pointer): bool {.nimcall.} =
           elif c == active and not c.iconic: minimize(c)
           else: restore(c)
       elif int(e.xbutton.x) >= trayX:
-        launch(selfCommand("clock"))
+        trayClick(int(e.xbutton.x), int(e.xbutton.button))
     drawPanel()
     true
   else: false
@@ -283,9 +511,10 @@ proc showPanel*(on: bool) =
     panelWin = None
   discard XFlush(d)
 
-proc panelSettings*(clock, hours24: bool) =
+proc panelSettings*(clock, hours24: bool; keyboards: seq[string] = @["us"]) =
   hasClock = clock
   h24 = hours24
+  layouts = keyboards
   drawPanel()
 
 proc panelPlace*() =
@@ -304,6 +533,10 @@ proc panelTick*() =
   ## Every few seconds (the desktop's own beat): the clock's minute, the battery.
   if not shown: return
   readBattery()
+  readVolume()
+  readWifi()
+  readNotesCount()
+  if volumeJob != nil or wifiJob != nil: wakeIn(500)
   let m = now().minute
   if m != minuteShown:
     minuteShown = m

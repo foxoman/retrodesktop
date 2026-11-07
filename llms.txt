@@ -38,13 +38,21 @@ the windows, the clock) and the Desktop folder's icons.
 - Settings: retroui's `loadSettings("retrodesktop")` (scheme, desktopColor,
   pattern, wallpaper, wallpaperMode, font, fontFile, textScale, size, touch,
   maximizeNew, linuxLook, wakeLock, startProgman, panel, backKey, night,
-  nightFrom, nightTo, nightScheme, language, feeds, vncPassword); Program
+  nightFrom, nightTo, nightScheme, language, feeds, vncPassword, layouts,
+  layoutSwitch, repeatDelay, repeatRate, key.<action>, saverPassword (a
+  salted SHA-256), updateChecked); Program
   Manager's items and windows in "retrodesktop-progman"; the desktop
   icons' places in "retrodesktop-icons".
 - The panel: `panel.nim`, an override-redirect window; the manager keeps it
   over the windows (`wm.onTop`), leaves its height free (`wm.workBottom`,
   `workArea()`), gives it its events (`wm.otherEvents`) and redraws it
   when the windows change (`wm.refresh`).
+- Shortcuts: `wm.setShortcuts` (keyboard.nim's `DefaultShortcuts`, Control
+  Panel > Keyboard); the Windows key's are grabbed whole (alone: Programs);
+  the desktop's actions through `wm.shortcut`, the windows' (halves,
+  maximize, minimize, Win+D) in the manager.
+- A program's failure: `crash.nim` (`watchCrashes(role)`, `retro-desktop
+  crash ROLE`), kept in crashes.log.
 - Arabic: `ar.nim`'s `desktopArabic` with retroui's `toolkitArabic`
   (`setUiLanguage`); the manager draws titles and menus through `tr`.
 - Programs talk to the desktop with ClientMessages on the root window:

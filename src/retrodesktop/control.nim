@@ -8,12 +8,13 @@
 
 import std/[os, strutils, math, times, algorithm]
 import retroui
-import common, link, art, sounds, help
+import common, link, art, sounds, help, keyboard, syscheck
 
 type Applet = enum
   apColor = "Color", apDesktop = "Desktop", apFonts = "Fonts", apWindows = "Windows",
   apDateTime = "Date/Time", apSound = "Sound", apSaver = "Screen Saver", apPrograms = "Linux Programs",
-  apAndroid = "Android", apInternational = "International", apAbout = "About"
+  apAndroid = "Android", apInternational = "International", apKeyboard = "Keyboard",
+  apSystem = "System Check", apBackup = "Backup", apAbout = "About"
 
 var
   conf: Settings
@@ -61,6 +62,30 @@ var
   pickFont = false
   newFont = ""
   language = 0
+  saverLocked = false
+  saverPassword = ""
+  showPassword = false
+  pwOld, pwNew, pwAgain, pwSaid: string
+  # the keyboard
+  kbTab = 0
+  layoutOn: seq[bool]            ## each of `Layouts`, chosen or not
+  layoutSwitch = 0
+  repeatDelay = 500
+  repeatRate = 25
+  tryTyping = ""
+  shortcutKeys: seq[string]      ## each of `ShortcutNames`' keys ("" none)
+  scSel = 0
+  showShortcut = false
+  scCtrl, scAlt, scShift, scWin: bool
+  scKey = 0
+  scCols: seq[Column]
+  scOpen = false
+  # System Check, Backup
+  checksStarted = false
+  backupSaid = ""
+  pickBackup = false
+  backupPath = ""
+  askRestore = false
 
 const
   Savers* = ["(None)", "Blank Screen", "Starfield", "Mystify", "Marquee"]
@@ -105,6 +130,24 @@ proc readAll() =
   panelOn = conf.setting("panel", "on") != "off"
   backKey = conf.setting("backKey", "off") == "on"
   language = max(0, Languages.find(conf.setting("language", "en")))
+  saverPassword = conf.setting("saverPassword", "")
+  saverLocked = saverPassword.len > 0
+  let lays = layoutsOf(conf)
+  layoutOn = @[]
+  for (k, _, _) in Layouts: layoutOn.add k in lays
+  layoutSwitch = 0
+  for i, (k, _) in Switches:
+    if k == conf.setting("layoutSwitch", "Alt+Shift"): layoutSwitch = i
+  try:
+    repeatDelay = clamp(parseInt(conf.setting("repeatDelay", "500")), 150, 1000)
+    repeatRate = clamp(parseInt(conf.setting("repeatRate", "25")), 2, 60)
+  except ValueError: discard
+  shortcutKeys = @[]
+  for (action, _) in ShortcutNames:
+    var keys = ""
+    for (a, k) in DefaultShortcuts:
+      if a == action: keys = k
+    shortcutKeys.add conf.setting("key." & action, keys)
   try: textPct = parseInt(conf.setting("textScale", "100")) except ValueError: textPct = 100
   try: sizePct = parseInt(conf.setting("size", "100")) except ValueError: sizePct = 100
   touch = max(0, AutoOnOff.find(conf.setting("touch", "auto")))
@@ -142,6 +185,17 @@ proc saveAll() =
   conf["panel"] = (if panelOn: "on" else: "off")
   conf["backKey"] = (if backKey: "on" else: "off")
   conf["language"] = Languages[clamp(language, 0, Languages.high)]
+  conf["saverPassword"] = (if saverLocked: saverPassword else: "")
+  var lays: seq[string]
+  for i, (k, _, _) in Layouts:
+    if i < layoutOn.len and layoutOn[i]: lays.add k
+  if lays.len == 0: lays = @["us"]
+  conf["layouts"] = lays.join(",")
+  conf["layoutSwitch"] = Switches[clamp(layoutSwitch, 0, Switches.high)][0]
+  conf["repeatDelay"] = $repeatDelay
+  conf["repeatRate"] = $repeatRate
+  for i, (action, _) in ShortcutNames:
+    if i < shortcutKeys.len: conf["key." & action] = shortcutKeys[i]
   if textPct != 100 or conf.hasKey("textScale"): conf["textScale"] = $textPct
   if sizePct != 100 or conf.hasKey("size"): conf["size"] = $sizePct
   conf["touch"] = AutoOnOff[clamp(touch, 0, 2)]
@@ -176,6 +230,9 @@ proc artOf(a: Applet): string =
   of apPrograms: "app"
   of apAndroid: "android"
   of apInternational: "international"
+  of apKeyboard: "keyboard"
+  of apSystem: "syscheck"
+  of apBackup: "backup"
   of apAbout: "logo"
 
 proc okCancel(): bool =
@@ -396,10 +453,43 @@ proc saverDialog() =
           label $saverDelay & " minutes"
       if Savers[clamp(saver, 0, Savers.high)] == "Marquee":
         field "Te&xt:": edit saverText
+      field "":
+        row:
+          checkbox("&Password protected", saverLocked)
+          if button("&Set Password...", enabled = saverLocked):
+            pwOld = ""
+            pwNew = ""
+            pwAgain = ""
+            pwSaid = ""
+            showPassword = true
     paragraph "It starts when nothing was typed or touched for the delay; a key, a click " &
-      "or a touch ends it. On a phone it takes the battery while it runs: Blank Screen " &
-      "takes least."
-    if okCancel(): saveAll()
+      "or a touch ends it (with a password, once it is typed). Win+L starts it now. On a " &
+      "phone it takes the battery while it runs: Blank Screen takes least. The password " &
+      "locks this desktop, not Android."
+    if okCancel():
+      if saverLocked and saverPassword.len == 0: saverLocked = false
+      saveAll()
+  if showPassword:
+    dialog(showPassword, "Change Password", 380):
+      form 0:
+        if saverPassword.len > 0:
+          field "&Old Password:": edit(pwOld, password = true)
+        field "&New Password:": edit(pwNew, password = true)
+        field "&Retype New Password:": edit(pwAgain, password = true)
+      if pwSaid.len > 0: label(pwSaid, color = color(170, 0, 0))
+      if okCancel():
+        if saverPassword.len > 0 and not passwordIs(saverPassword, pwOld):
+          pwSaid = "The old password is not right."
+          showPassword = true
+        elif pwNew != pwAgain:
+          pwSaid = "The new password and its retyping differ."
+          showPassword = true
+        elif pwNew.len == 0:
+          saverPassword = ""
+          saverLocked = false
+        else:
+          saverPassword = newPasswordHash(pwNew)
+          saverLocked = true
 
 proc programsDialog() =
   dialog(showDialog, "Linux Programs", 480):
@@ -434,6 +524,156 @@ proc internationalDialog() =
       "right to left). Other programs keep their own language."
     if okCancel(): saveAll()
 
+const KeyChoices = ["(none)", "the Windows key alone", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
+                    "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+                    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "F1", "F2", "F3", "F4", "F5",
+                    "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Left", "Right", "Up", "Down",
+                    "Esc", "Tab", "Space", "Enter", "Home", "End", "Delete", "Insert", "Print"]
+
+proc keyboardDialog() =
+  dialog(showDialog, "Keyboard", 520):
+    tabs(kbTab, ["&Layouts", "&Shortcuts", "&Repeat"]):
+      case kbTab
+      of 0:
+        label("Type in these (the first at the start):")
+        beginPanel(dp(150), key = "layouts")
+        for i, (_, name, mark) in Layouts:
+          withId(i):
+            checkbox(name & "   (" & mark & ")", layoutOn[i])
+        endPanel()
+        form 0:
+          field "S&witch with:":
+            var names: seq[string]
+            for (k, _) in Switches: names.add k
+            combo(names, layoutSwitch)
+        paragraph "The panel shows the one typing now (a click on it goes to the next). " &
+          (if findExe("setxkbmap").len == 0: "More than one needs setxkbmap: Setup > System > Keyboard layouts. "
+           else: "") &
+          "In Termux:X11's Keyboard preferences turn on \"Prefer scancodes when possible\"."
+      of 1:
+        var rows: seq[seq[string]]
+        for i, (_, what) in ShortcutNames:
+          rows.add @[(if shortcutKeys[i].len > 0: shortcutKeys[i] else: "(none)"), what]
+        if scCols.len == 0: scCols = @[column("Keys", 130), column("Does", 330)]
+        let ev = grid(scCols, rows, scSel, height = 8)
+        if ev.activated: scOpen = true
+        row:
+          if (button("&Change...", enabled = scSel in 0 ..< shortcutKeys.len) or scOpen) and
+             scSel in 0 ..< shortcutKeys.len:
+            scOpen = false
+            let parts = shortcutKeys[scSel].split('+')
+            scCtrl = "Ctrl" in parts
+            scAlt = "Alt" in parts
+            scShift = "Shift" in parts
+            scWin = "Win" in parts
+            scKey = 0
+            if shortcutKeys[scSel] == "Win": scKey = 1
+            elif parts.len > 0: scKey = max(0, KeyChoices.find(parts[^1]))
+            showShortcut = true
+          if button("Reset &All"):
+            for i, (action, _) in ShortcutNames:
+              for (a, k) in DefaultShortcuts:
+                if a == action: shortcutKeys[i] = k
+        paragraph "Alt+Tab, Alt+F4, Ctrl+Esc and Alt+Esc are always the desktop's. So that the " &
+          "Windows key and Alt+Tab reach it and not Android: Termux:X11's Keyboard preferences > " &
+          "\"Enable Accessibility service for intercepting system shortcuts manually\"."
+      else:
+        form 0:
+          field "&Delay:":
+            row([-1, 90]):
+              slider(repeatDelay, 150, 1000, ticks = 6)
+              label $repeatDelay & " ms"
+          field "&Rate:":
+            row([-1, 90]):
+              slider(repeatRate, 2, 60, ticks = 6)
+              label $repeatRate & " a second"
+          field "&Try it:": edit(tryTyping)
+        paragraph "How long a key held waits before it repeats, and how fast it repeats then " &
+          "(the try takes them after OK)."
+    if okCancel(): saveAll()
+  if showShortcut:
+    dialog(showShortcut, "Change the Keys", 380):
+      label(ShortcutNames[clamp(scSel, 0, ShortcutNames.high)][1], bold = true)
+      row:
+        checkbox("&Ctrl", scCtrl)
+        checkbox("&Alt", scAlt)
+        checkbox("&Shift", scShift)
+        checkbox("&Win", scWin)
+      form 0:
+        field "&Key:": combo(KeyChoices, scKey)
+      if okCancel():
+        var keys = ""
+        if scKey == 1: keys = "Win"
+        elif scKey > 1:
+          var parts: seq[string]
+          if scCtrl: parts.add "Ctrl"
+          if scAlt: parts.add "Alt"
+          if scShift: parts.add "Shift"
+          if scWin: parts.add "Win"
+          parts.add KeyChoices[scKey]
+          keys = parts.join("+")
+        if scSel in 0 ..< shortcutKeys.len: shortcutKeys[scSel] = keys
+
+proc systemDialog() =
+  if not checksStarted:
+    checksStarted = true
+    startChecks()
+  if stillChecking(): wakeIn(300)
+  dialog(showDialog, "System Check", 560):
+    beginPanel(max(dp(120), min(dp(330), ui.h - dp(140))), key = "checks")
+    for i, c in checks():
+      withId(i):
+        row([24, -1, 0]):
+          let (mark, ink) = case c.state
+            of csOk: ("✔", color(0, 128, 0))
+            of csWarn: ("!", color(176, 112, 0))
+            of csMissing: ("✖", color(176, 0, 0))
+            of csChecking: ("…", color(128, 128, 128))
+          label(mark, bold = true, color = ink)
+          col:
+            label(c.name, bold = true)
+            paragraph c.detail
+          if c.install.len > 0:
+            if button("&Install..."): launch(selfCommand("setup") & " " & quoteShell(c.install))
+    endPanel()
+    row:
+      if button("&Check Again"): startChecks()
+      spring()
+      if button("OK", isDefault = true):
+        showDialog = false
+        checksStarted = false
+  if not showDialog: checksStarted = false
+
+proc backupDialog() =
+  dialog(showDialog, "Backup", 480):
+    paragraph "A backup keeps the desktop's settings, Program Manager's groups, the desktop's " &
+      "icons, the programs' settings (never their passwords) and your fonts in one .zip, " &
+      "in " & backupFolder() & ". Restore puts one back: on a new phone, or after Termux " &
+      "was installed again."
+    if backupSaid.len > 0: label(backupSaid, literal = true)
+    row:
+      if button("&Make a Backup", isDefault = true):
+        try: backupSaid = "Made: " & makeBackup()
+        except CatchableError as e: backupSaid = "Not made: " & e.msg
+      if button("&Restore..."):
+        backupPath = backupFolder()
+        pickBackup = true
+      spring()
+      if button("Close"):
+        showDialog = false
+        backupSaid = ""
+  if pickBackup:
+    if filePicker(pickBackup, backupPath, fmOpen, ["*.zip"], "Restore a Backup"): askRestore = true
+  if askRestore:
+    if msgBox(askRestore, "Restore", "Put back the settings in " & backupPath.extractFilename &
+              "? The ones here now are replaced.", ["&Restore", "Cancel"], miQuestion) == 1:
+      try:
+        let n = restoreBackup(backupPath)
+        backupSaid = $n & " files put back. Programs open now take them when they start again."
+        readAll()
+        saveAll()
+      except CatchableError as e: backupSaid = "Not restored: " & e.msg
+
 proc aboutDialog() =
   dialog(showDialog, "About " & DesktopName, 440):
     row:
@@ -459,6 +699,9 @@ proc runControl*() =
   applets = @[apColor, apDesktop, apFonts, apWindows, apDateTime, apSound, apSaver, apPrograms]
   if inTermux(): applets.add apAndroid
   applets.add apInternational
+  applets.add apKeyboard
+  applets.add apSystem
+  applets.add apBackup
   applets.add apAbout
   marked = newSeq[bool](applets.len)
   var showAboutCp = false
@@ -502,6 +745,9 @@ proc runControl*() =
                  of apPrograms: "The look GTK, Qt and other programs are given"
                  of apAndroid: "Keeping the desktop running on Android"
                  of apInternational: "The language of the desktop's programs"
+                 of apKeyboard: "The layouts (English, Arabic...), the shortcuts, how keys repeat"
+                 of apSystem: "What the desktop's programs need, and whether it is here"
+                 of apBackup: "The settings in one file, and back"
                  of apAbout: "About " & DesktopName)
               else: ""))
     if showDialog and opened in 0 ..< applets.len:
@@ -516,6 +762,9 @@ proc runControl*() =
       of apPrograms: programsDialog()
       of apAndroid: androidDialog()
       of apInternational: internationalDialog()
+      of apKeyboard: keyboardDialog()
+      of apSystem: systemDialog()
+      of apBackup: backupDialog()
       of apAbout: aboutDialog()
     aboutBox(showAboutCp, "Control Panel", DesktopVersion)
     endFrame()

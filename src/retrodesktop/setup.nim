@@ -17,7 +17,7 @@
 
 import std/[os, osproc, strutils, strtabs, posix, times]
 import retroui
-import common, link, help
+import common, link, help, updates
 
 type
   Offer = object
@@ -31,7 +31,7 @@ type
 
   Screen = enum scChoose, scChecking, scConfirm, scWorking, scDone, scFailed, scManual
 
-  StepKind = enum stRepo, stUpdate, stInstall, stRemove, stFetch
+  StepKind = enum stRepo, stUpdate, stInstall, stRemove, stFetch, stDesktop
 
   Step = object
     kind: StepKind
@@ -86,6 +86,7 @@ let Offers = @[
   offer("Multimedia", "Audacity", "audacity", "x11", "Records and edits sound"),
   offer("Multimedia", "mpv", "mpv", "", "A video player that opens its own window", cli = "mpv --help"),
   offer("Multimedia", "Sound", "pulseaudio", "", "The sound for every program (the desktop starts it)"),
+  offer("Multimedia", "Volume Control", "pavucontrol", "x11", "Each program's volume, the speakers, the microphone"),
   offer("Games", "SuperTux", "supertux", "x11", "Tux runs and jumps through levels"),
   offer("Games", "OpenTTD", "openttd", "x11", "Build a transport company"),
   offer("Games", "DOSBox-X", "dosbox-x", "x11", "A DOS PC, for the old games and programs you have"),
@@ -103,6 +104,8 @@ let Offers = @[
   offer("System", "Termux:API tools", "termux-api", "", "The phone's clipboard and notifications (needs the Termux:API app)"),
   offer("System", "QEMU", "qemu-system-x86-64", "x11", "A whole PC in a window, for other systems", big = true),
   offer("System", "Share Desktop", "x11vnc", "x11", "Use this desktop from a computer (VNC): Main > Share Desktop"),
+  offer("System", "Keyboard layouts", "xorg-setxkbmap xkeyboard-config xorg-xkbcomp", "x11",
+        "More than one layout (English and Arabic...): Control Panel > Keyboard"),
   offer("System", "3D graphics", "virglrenderer-android mesa", "",
         "OpenGL programs and games drawn by Android's GPU (VirGL)"),
   offer("Fonts", "DejaVu", "ttf-dejavu", "", "Fonts with more letters and symbols"),
@@ -257,6 +260,12 @@ proc aptArgs(s: Step): seq[string] =
       "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"] & s.pkgs
   of stUpdate: @["apt-get", "update"]
   of stRemove: @["apt-get", "remove", "-y", "--autoremove", "-o", "APT::Status-Fd=1"] & s.pkgs
+  of stDesktop:
+    # (pkgs: the new package's address: downloaded, then installed by apt)
+    let deb = getTempDir() / "retro-desktop-update.deb"
+    @["sh", "-c", "curl -L --fail -o " & quoteShell(deb) & " " & quoteShell(s.pkgs[0]) &
+      " && apt-get install -y -o APT::Status-Fd=1 -o Dpkg::Options::=--force-confdef" &
+      " -o Dpkg::Options::=--force-confold " & quoteShell(deb) & "; s=$?; rm -f " & quoteShell(deb) & "; exit $s"]
   of stFetch:
     # (pkgs: the address, then the folder: downloaded, unzipped there)
     let dir = s.pkgs[1]
@@ -272,6 +281,7 @@ proc weight(s: Step): float =
   of stInstall: 8.0
   of stRemove: 3.0
   of stFetch: 4.0
+  of stDesktop: 8.0
 
 proc gauge(): float =
   var total, done = 0.0
@@ -360,6 +370,7 @@ proc startStep() =
           of stInstall: "Installing " & names(toAdd)
           of stRemove: "Removing " & names(toRemove)
           of stFetch: "Downloading " & s.pkgs[1].extractFilename & "'s levels"
+          of stDesktop: "Updating " & DesktopName
   status = ""
   job.start(aptArgs(s))
 
@@ -517,6 +528,23 @@ proc chooseDialog() =
   dialog(showMain, DesktopName & " Setup", 640):
     paragraph "Check the programs you want on your desktop; clear one that is installed " &
       "to remove it. Setup gets them from Termux's packages and puts them in Program Manager."
+    # (a newer Retro Desktop: asked of GitHub when Setup opens)
+    let (asked, up) = updateFound()
+    if not asked: wakeIn(500)
+    elif up.version.len > 0:
+      row:
+        msgIcon(miInfo)
+        label(DesktopName & " " & up.version & " is out (this is " & DesktopVersion & ").", bold = true)
+        spring()
+        if up.deb.len > 0 and inTermux():
+          if button("&Update Now"):
+            steps = @[Step(kind: stDesktop, pkgs: @[up.deb])]
+            toAdd = @[]
+            toRemove = @[]
+            stepAt = 0
+            screen = scWorking
+            startStep()
+        elif button("&See It..."): launch(selfCommand("open") & " " & quoteShell(ReleasesPage))
     let h = max(dp(120), min(dp(340), ui.h - dp(250)))
     scrollPanel(h):
       var last = ""
@@ -673,6 +701,7 @@ proc runSetup*(args: seq[string]) =
     inc k
   readInstalled()
   want = installed
+  checkForUpdate()
   for i, o in Offers:
     if o.name.toLowerAscii in asked or o.pkgs in asked: want[i] = true
   applyDesktopLook()

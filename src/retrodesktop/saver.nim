@@ -2,6 +2,9 @@
 ## screen, until a key, a click or a touch. The desktop starts one when
 ## nothing was done for the delay Control Panel set (it asks the X server how
 ## long the screen has been idle: the MIT-SCREEN-SAVER extension, libXss).
+## With a password (Control Panel > Screen Saver, as 3.1's "Password
+## protected"), it asks for it before it ends, and holds the keyboard and the
+## pointer meanwhile: Alt+Tab and the panel cannot go around it.
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
@@ -9,6 +12,7 @@ import std/[random, math, dynlib]
 import retroui
 
 import xlib, common, link
+import retroui/uirelays/drivers/x11_driver
 
 # ---- how long the screen has been idle ---------------------------------------------------------------
 
@@ -64,13 +68,33 @@ proc runSaver*(args: seq[string]) =
   var started = 0
   var marqueeX = 1e9
   var marqueeY = 0
+  let kept = s.setting("saverPassword", "")
+  var asking = false             # (the password box is up)
+  var typed = ""
+  var wrong = false
+  var held = false               # (the keyboard and the pointer are the saver's)
   while beginFrame():
     if started == 0: started = ui.now
-    # (a key, a click, a touch, the pointer moved: the saver ends)
-    if ui.now - started > 800:
+    if kept.len > 0 and not held and ui.now - started > 300:
+      # (with a password: nothing else gets the keyboard or the pointer)
+      let d = Display(x11Display())
+      let w = Window(x11Window())
+      if d != nil and XGrabKeyboard(d, w, 0, GrabModeAsync, GrabModeAsync, CurrentTime) == 0:
+        discard XGrabPointer(d, w, 0, cuint(ButtonPressMask or ButtonReleaseMask or PointerMotionMask),
+                             GrabModeAsync, GrabModeAsync, w, 0, CurrentTime)
+        held = true
+      else: wakeIn(200)
+    # (a key, a click, a touch, the pointer moved: the saver ends -- or asks
+    # for the password)
+    if ui.now - started > 800 and not asking:
       if ui.pressed or ui.rpressed or ui.key != KeyNone or
          (mx >= 0 and (abs(ui.mx - mx) > 8 or abs(ui.my - my) > 8)):
-        quitApp()
+        if kept.len == 0: quitApp()
+        else:
+          asking = true
+          typed = ""
+          wrong = false
+          ui.key = KeyNone
     if mx < 0 or ui.now - started <= 800:
       mx = ui.mx
       my = ui.my
@@ -133,5 +157,24 @@ proc runSaver*(args: seq[string]) =
     else:
       # Blank Screen: nothing to draw again
       wakeIn(1000)
+    if asking:
+      dialog(asking, "Screen Saver", 360):
+        label("This screen is locked. Its password:")
+        edit(typed, password = true)
+        if wrong: label("That is not the password.", color = color(170, 0, 0))
+        row:
+          spring()
+          if button("OK", isDefault = true):
+            if passwordIs(kept, typed): quitApp()
+            else:
+              wrong = true
+              typed = ""
+              ui.focus = 0         # (the password's box has the focus again)
+          if button("Cancel"):
+            asking = false
+      if not asking:
+        # (back to the saver; the pointer where it is now)
+        started = ui.now
+        mx = -1
     endFrame()
   closeApp()

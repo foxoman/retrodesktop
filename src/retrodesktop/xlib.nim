@@ -229,6 +229,9 @@ const
   Mod2Mask* = 16.cuint     ## Num Lock (as a rule)
   Mod4Mask* = 64.cuint     ## the Windows key
   AnyModifier* = cuint(1 shl 15)
+  XkbUseCoreKbd* = 0x0100.cuint
+  XkbStateNotify* = 2.cuint
+  XkbGroupStateMask* = 0x10.culong
   AnyButton* = 0.cuint
 
   IsViewable* = 2.cint
@@ -269,6 +272,9 @@ const
   XK_Escape* = 0xff1b.culong
   XK_F4* = 0xffc1.culong
   XK_Super_L* = 0xffeb.culong
+  XK_Super_R* = 0xffec.culong
+  XK_Left* = 0xff51.culong
+  XK_Right* = 0xff53.culong
 
 {.push cdecl, dynlib: libX11, importc.}
 proc XOpenDisplay*(name: cstring): Display
@@ -321,6 +327,14 @@ proc XGrabKey*(d: Display; keycode: cint; modifiers: cuint; w: Window; ownerEven
 proc XUngrabKey*(d: Display; keycode: cint; modifiers: cuint; w: Window): cint
 proc XKeysymToKeycode*(d: Display; keysym: culong): uint8
 proc XLookupKeysym*(e: ptr XKeyEvent; index: cint): culong
+proc XStringToKeysym*(s: cstring): culong
+proc XKeycodeToKeysym*(d: Display; keycode: uint8; index: cint): culong
+proc XkbQueryExtension*(d: Display; opcode, eventBase, errorBase, major, minor: ptr cint): XBool
+proc XkbSelectEventDetails*(d: Display; deviceSpec, eventType: cuint; affect, details: culong): XBool
+proc XkbGetState*(d: Display; deviceSpec: cuint; state: pointer): cint
+proc XkbLockGroup*(d: Display; deviceSpec, group: cuint): XBool
+proc XkbSetAutoRepeatRate*(d: Display; deviceSpec, delay, interval: cuint): XBool
+proc XAutoRepeatOn*(d: Display): cint
 proc XQueryKeymap*(d: Display; keys: ptr array[32, char]): cint
 proc XQueryPointer*(d: Display; w: Window; root, child: ptr Window; rx, ry, wx, wy: ptr cint;
                     mask: ptr cuint): XBool

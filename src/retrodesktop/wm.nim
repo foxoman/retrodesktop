@@ -57,11 +57,20 @@ var
   root*, desk*, checkWin, menuWin: Window
   clients*: seq[Client]          ## bottom to top
   active*: Client
+  desktopShown: seq[Client]      # (Win+D: the windows it minimized, to bring back)
+  halves: seq[tuple[c: Client; side: int]]   # (windows put on a half of the screen)
   gc: pointer
   running*: bool
   otherWm: bool
   changed*: proc () {.nimcall.}  ## the desktop should draw again (icons)
   taskList*: proc () {.nimcall.} ## Ctrl+Esc
+  keyboardChanged*: proc () {.nimcall.}
+    ## the layout typing changed (the panel's mark follows)
+  xkbBase = -1.cint               # (XKB's first event number)
+  shortcut*: proc (action: string) {.nimcall.}
+    ## a shortcut of the desktop's (programs, run, files, terminal, tasklist,
+    ## control, lock): the desktop does it; the windows' own (left, right,
+    ## maximize, minimize, desktop) the manager does
   command*: proc (n, arg: int) {.nimcall.}
     ## a _RETRO_DESKTOP message the desktop answers (3 arrange icons,
     ## 4 the settings changed, 5 exit)
@@ -1161,6 +1170,10 @@ proc unmanage(c: Client; destroyed: bool) =
     setWmState(c, 0)
   discard XDestroyWindow(dpy, c.frame)
   shownCursor.del(c.frame)
+  for i in countdown(halves.high, 0):
+    if halves[i].c == c: halves.delete(i)
+  for i in countdown(desktopShown.high, 0):
+    if desktopShown[i] == c: desktopShown.delete(i)
   var rest: seq[Client]
   for x in clients:
     if x != c: rest.add x
@@ -1330,11 +1343,154 @@ proc endDrag(e: XButtonEvent) =
 
 # ---- the events -------------------------------------------------------------------------------------
 
+# ---- the keyboard's shortcuts ------------------------------------------------------------------------
+
+var
+  shortcuts: seq[tuple[action: string; mods: cuint; sym: culong]]
+  superHeld = false              # the Windows key is down ...
+  superUsed = false              # ... and another key went with it
+
+proc keysOf*(s: string): tuple[mods: cuint; sym: culong] =
+  ## "Ctrl+Alt+T", "Win+Left", "Win" -> the modifiers and the key (0 when it
+  ## is not a key X knows).
+  for part in s.split('+'):
+    case part.strip.toLowerAscii
+    of "ctrl", "control": result.mods = result.mods or ControlMask
+    of "alt": result.mods = result.mods or Mod1Mask
+    of "shift": result.mods = result.mods or ShiftMask
+    of "win", "super", "meta": result.mods = result.mods or Mod4Mask
+    of "": discard
+    else:
+      let name = case part.strip.toLowerAscii
+                 of "esc": "Escape"
+                 of "enter": "Return"
+                 of "space": "space"
+                 of "del": "Delete"
+                 of "left", "right", "up", "down", "tab", "home", "end", "delete", "insert", "print":
+                   part.strip[0 .. 0].toUpperAscii & part.strip[1 .. ^1].toLowerAscii
+                 else:
+                   if part.strip.len == 1: part.strip.toLowerAscii else: part.strip
+      result.sym = XStringToKeysym(cstring(name))
+  if result.sym == 0 and result.mods == Mod4Mask: result.sym = XK_Super_L   # (the key alone)
+
+proc grabKeys()
+
+proc setShortcuts*(list: openArray[(string, string)]) =
+  ## The shortcuts to answer (an action and its keys, "" none); the keys are
+  ## taken from every program while the desktop runs.
+  shortcuts = @[]
+  for (action, keys) in list:
+    if keys.len == 0: continue
+    let (m, k) = keysOf(keys)
+    if k != 0: shortcuts.add (action, m, k)
+  if dpy != nil:
+    discard XUngrabKey(dpy, 0, AnyModifier, root)
+    grabKeys()
+
+proc halfGeometry(c: Client; side: int) =
+  ## The left (0) or right (1) half of the screen, the frame on it.
+  let (sw, sh) = workArea()
+  let half = sw div 2
+  c.x = (if side == 0: 0 else: half)
+  c.y = 0
+  c.w = max(c.minW, half - 2 * bw())
+  c.h = max(c.minH, sh - topOf() - bw())
+
+proc toHalf*(c: Client; side: int) =
+  ## Puts a window on the left (0) or right (1) half of the screen; again on
+  ## the same side puts it back.
+  if c == nil or c.fixed or c.transient != None or c.fullscreen: return
+  var at = -1
+  for i, h in halves:
+    if h.c == c: at = i
+  if at >= 0 and halves[at].side == side:
+    halves.delete(at)
+    (c.x, c.y, c.w, c.h) = c.saved
+  else:
+    if c.iconic: restore(c)
+    if c.maximized:
+      c.maximized = false
+      setNetState(c)
+    elif at < 0: c.saved = (c.x, c.y, c.w, c.h)
+    if at >= 0: halves[at].side = side else: halves.add (c, side)
+    halfGeometry(c, side)
+  applyGeometry(c)
+  focus(c)
+  drawFrame(c)
+  changedNow()
+
+proc fromHalf(c: Client): bool =
+  ## (a window on a half: back to its size before, true)
+  for i, h in halves:
+    if h.c == c:
+      halves.delete(i)
+      (c.x, c.y, c.w, c.h) = c.saved
+      applyGeometry(c)
+      drawFrame(c)
+      return true
+
+proc showDesktopToggle() =
+  ## Win+D: every window minimized; again, they come back.
+  if desktopShown.len > 0:
+    for c in desktopShown:
+      if c in clients and c.iconic: restore(c)
+    desktopShown = @[]
+  else:
+    for c in snapshot():
+      if not c.iconic and c.transient == None:
+        desktopShown.add c
+        minimize(c)
+
+proc doShortcut(action: string) =
+  case action
+  of "left": toHalf(active, 0)
+  of "right": toHalf(active, 1)
+  of "maximize":
+    if active != nil:
+      discard fromHalf(active)
+      if not active.maximized: maximize(active)
+  of "minimize":
+    if active != nil:
+      if active.maximized: restore(active)
+      elif not fromHalf(active): minimize(active)
+  of "desktop": showDesktopToggle()
+  else:
+    if shortcut != nil: shortcut(action)
+
+proc onSuperKey(e: XKeyEvent; press: bool): bool =
+  ## The Windows key: alone (pressed and let go), its own shortcut; with
+  ## another key, that key's. True when it was the Windows key's business.
+  let sym = XLookupKeysym(unsafeAddr e, 0)
+  if sym == XK_Super_L or sym == XK_Super_R:
+    if press:
+      superHeld = true
+      superUsed = false
+    else:
+      if superHeld and not superUsed:
+        for s in shortcuts:
+          if s.sym == XK_Super_L and s.mods == Mod4Mask: doShortcut(s.action)
+      superHeld = false
+    return true
+  if not press or (e.state and Mod4Mask) == 0: return false
+  superUsed = true
+  let mods = e.state and (ShiftMask or ControlMask or Mod1Mask or Mod4Mask)
+  for s in shortcuts:
+    if s.sym == sym and s.mods == mods:
+      doShortcut(s.action)
+      return true
+  true                                  # (the Windows key held: nothing else gets it)
+
 proc onKey(e: XKeyEvent) =
   let tab = cuint(XKeysymToKeycode(dpy, XK_Tab))
   let f4 = cuint(XKeysymToKeycode(dpy, XK_F4))
   let esc = cuint(XKeysymToKeycode(dpy, XK_Escape))
+  if onSuperKey(e, true): return
   let mods = e.state and (ShiftMask or ControlMask or Mod1Mask)
+  let sym = XLookupKeysym(unsafeAddr e, 0)
+  for s in shortcuts:
+    if s.sym == sym and s.mods == mods and (s.mods and Mod4Mask) == 0:
+      doShortcut(s.action)
+      return
   if e.keycode == tab and (mods and Mod1Mask) != 0: switchKey((mods and ShiftMask) != 0, e.time)
   elif e.keycode == f4 and mods == Mod1Mask: close(active)
   elif e.keycode == esc and mods == ControlMask:
@@ -1423,6 +1579,9 @@ proc handle(p: pointer): bool {.nimcall.} =
   if otherEvents != nil and otherEvents(p): return true
   let e = cast[ptr XEvent](p)
   let kind = e.theType
+  if xkbBase > 0 and kind == xkbBase:
+    if keyboardChanged != nil: keyboardChanged()
+    return true
   case kind
   of MapRequest:
     let w = e.xmaprequest.window
@@ -1500,6 +1659,9 @@ proc handle(p: pointer): bool {.nimcall.} =
   of KeyRelease:
     if switchWin != None and e.xkey.window == switchWin:
       switchKeyEvent(e.xkey, false)
+      return true
+    if e.xkey.window == root:
+      discard onSuperKey(e.xkey, false)
       return true
     return e.xkey.window != desk
   of Expose:
@@ -1619,12 +1781,27 @@ proc setBackCloses*(on: bool) =
   backGrabbed = on
 
 proc grabKeys() =
-  for (sym, mods) in [(XK_Tab, Mod1Mask), (XK_Tab, Mod1Mask or ShiftMask), (XK_F4, Mod1Mask),
-                      (XK_Escape, ControlMask), (XK_Escape, Mod1Mask)]:
+  var keys = @[(XK_Tab, Mod1Mask), (XK_Tab, Mod1Mask or ShiftMask), (XK_F4, Mod1Mask),
+               (XK_Escape, ControlMask), (XK_Escape, Mod1Mask)]
+  var superToo = false
+  for s in shortcuts:
+    if (s.mods and Mod4Mask) != 0: superToo = true
+    else: keys.add (s.sym, s.mods)
+  for (sym, mods) in keys:
     let code = cint(XKeysymToKeycode(dpy, sym))
     if code == 0: continue
     for extra in [0.cuint, LockMask, Mod2Mask, LockMask or Mod2Mask]:
-      discard XGrabKey(dpy, code, mods or extra, root, 1, GrabModeAsync, GrabModeAsync)
+      discard XGrabKey(dpy, code, mods or extra, root, 0, GrabModeAsync, GrabModeAsync)
+  if superToo:
+    # (the Windows key itself: while it is down every key comes here, the
+    # shortcuts with it are the desktop's)
+    # (every key that is one: a keyboard can have two of each)
+    # (not owner_events: the keys pressed with it come to the root, even
+    # when the desktop's own window has the focus)
+    for code in 8 .. 255:
+      let sym = XKeycodeToKeysym(dpy, uint8(code), 0)
+      if sym == XK_Super_L or sym == XK_Super_R:
+        discard XGrabKey(dpy, cint(code), AnyModifier, root, 0, GrabModeAsync, GrabModeAsync)
   backGrabbed = false
   setBackCloses(backCloses)
 
@@ -1686,6 +1863,13 @@ proc start*(): bool =
   discard XMoveResizeWindow(dpy, desk, 0, 0, cuint(sw), cuint(sh))
   discard XLowerWindow(dpy, desk)
   grabKeys()
+  # (the keyboard's layout changing: XKB says it)
+  var op, ev, er: cint
+  var major = 1.cint
+  var minor = 0.cint
+  if XkbQueryExtension(dpy, addr op, addr ev, addr er, addr major, addr minor) != 0:
+    xkbBase = ev
+    discard XkbSelectEventDetails(dpy, XkbUseCoreKbd, XkbStateNotify, XkbGroupStateMask, XkbGroupStateMask)
   fleur = culong(x11ClassicCursor(curMove, cursorScale()))
   discard XDefineCursor(dpy, root, cursorFor(pNone))
   running = true

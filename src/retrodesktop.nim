@@ -9,7 +9,7 @@
 import std/[os, strutils]
 import retrodesktop/[common, link, session, progman, accessories, control, tasklist, terminal,
                      browser, setup, boxes, games, write, clipboard, opener, saver, sounds, help,
-                     charmap, viewers, players, phone, utilities]
+                     charmap, viewers, players, phone, utilities, crash]
 
 proc usage() =
   echo DesktopName, " ", DesktopVersion, " -- a Windows 3.1 style desktop"
@@ -40,8 +40,7 @@ proc usage() =
   echo "  retro-desktop diskspace   Disk Space"
   echo "  retro-desktop share       Share Desktop (VNC)"
 
-when isMainModule:
-  let role = if paramCount() >= 1: paramStr(1).toLowerAscii else: ""
+proc main(role: string) =
   case role
   of "", "session", "desktop": runSession()
   of "progman": runProgman()
@@ -116,9 +115,20 @@ when isMainModule:
   of "calc", "calculator": runCalc()
   of "calendar": runCalendar()
   of "cardfile": runCardfile()
+  of "crash": runCrashBox((if paramCount() >= 2: paramStr(2) else: "a program"),
+                          paramCount() >= 3 and paramStr(3) == "noted")
   of "--version", "-v", "version": echo DesktopName, " ", DesktopVersion
   of "--retro-command":
     # (for scripts and the checks: asks the desktop to cascade (1), tile (2),
     # arrange icons (3), take the look again (4), exit (5))
     if paramCount() >= 2: sendRetroCommand(parseInt(paramStr(2)))
   else: usage()
+
+when isMainModule:
+  let role = if paramCount() >= 1: paramStr(1).toLowerAscii else: ""
+  # (a fault, or an error no one caught: the General Protection Fault box)
+  watchCrashes(role)
+  try: main(role)
+  except Exception as e:
+    crashed(role, e)
+    raise
