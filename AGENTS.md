@@ -20,13 +20,22 @@ alike.
   `dialer`, `news`, `diskspace`, `share`).
 - `src/retrodesktop/`:
   - `wm.nim` -- the window manager (frames, focus, keys, EWMH/ICCCM), on the
-    desktop's X connection through Retro Nim UI's `x11EventHook`
+    desktop's X connection through Retro Nim UI's `x11EventHook`; its menus
+    (cascading: `MenuItem.sub`, 3.1's look, the Start menu's band with
+    `big`), the work area (`workInset`, `workRect`, `workChanged`), and
+    snapping as Windows 11's (zones of the work area, `layouts()`, the
+    preview, Snap Assist, the layouts on the maximize button, `winArrow`);
+    `tick()` is its timers (a menu opening on a rest, the layouts), called
+    from the desktop's frame
   - `session.nim` -- the desktop: background, icons, menu, welcome, exit,
     memory, night colors; a session bus for screen readers where AT-SPI is
     installed and none was started (`startScreenReaders`)
-  - `panel.nim` -- the panel: Programs, the windows' buttons, the clock
-    (an override-redirect window the manager keeps on top, `wm.onTop`, and
-    leaves room for, `wm.workBottom`)
+  - `panel.nim` -- the panel, Windows 95's taskbar in 3.1's colors: Start
+    and its menu, the windows' buttons, the tray, on any edge (`Edge`),
+    rows or a width, auto hide, always on top or not (an override-redirect
+    window the manager keeps on top, `wm.onTop`, and leaves room for,
+    `wm.workInset`); its settings panelEdge, panelRows, panelWidth,
+    panelAutoHide, panelOnTop, startSmallIcons, panelClock
   - `deskicons.nim` -- the icons of the Desktop folder on the desktop (each a
     node for screen readers, as the minimized windows' icons and the
     Terminal's screen are: what is drawn by hand says what it is with
@@ -62,7 +71,8 @@ alike.
   - `setup.nim` -- Setup: the catalogue of Termux programs (each name
     checked against termux-packages and x11-packages before it goes in),
     apt-get with `APT::Status-Fd` underneath
-  - `boxes.nim` -- the desktop's Run, About, Exit and Welcome, each a window
+  - `boxes.nim` -- the desktop's Run, About, Exit, Welcome and Taskbar
+    Properties, each a window
   - `games.nim` -- Minesweeper, Solitaire, Reversi
   - `write.nim`, `clipboard.nim` -- Write, Clipboard Viewer
   - `opener.nim` -- `open`: files and links to their program; the desktop's
@@ -116,8 +126,13 @@ alike.
    owner events, so the keys come to the root even when the desktop's own
    window has the focus.
    A closure made in a loop (a menu item's action) sees the loop's last
-   values: make each one in a proc of its own (`startItem`, `openGroup` in
+   values: make each one in a proc of its own (`startItem`, `groupItems` in
    panel.nim).
+   Every window can be sized: `Client.fixed` only says it asked for one
+   size; a splash window (`splash`) keeps its size and has no buttons.
+   Nim's `Socket.send` with its default `SafeDisconn` never ends on a socket
+   closed at the other end: send to another program's socket with
+   `flags = {}` and treat the error as the program gone (players.nim).
    The desktop is under every window, so whatever has to show over them --
    its menu, the icons' menu, the control menu -- is the manager's
    `showMenu` (a window of its own, the pointer and the keyboard grabbed),

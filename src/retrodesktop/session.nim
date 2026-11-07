@@ -84,8 +84,8 @@ proc relook() =
   schemeNow = currentScheme(conf)
   useGpu()
   if managing:
+    panelSettings(conf, layoutsOf(conf))
     showPanel(conf.setting("panel", "on") != "off")
-    panelSettings(true, conf.setting("clock24", "on") != "off", layoutsOf(conf))
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -108,7 +108,7 @@ proc wakeLock(on: bool) =
 const
   SessionSettings = "retrodesktop-session"
   NotAgain = ["", "session", "desktop", "progman", "tasklist", "run", "about", "exit",
-              "welcome", "setup", "open", "saver", "help", "tour", "notify", "storage", "sound",
+              "welcome", "setup", "open", "saver", "help", "tour", "notify", "storage", "sound", "taskbar",
               "camera", "dialer", "recorder", "share"]
     ## (the desktop's own parts that are not opened again: Program Manager
     ## starts by itself, the rest are dialogs, or ask Android for the
@@ -686,6 +686,47 @@ proc onFatal(sig: cint) {.noconv.} =
   discard posix.write(2, msg.cstring, msg.len)
   c_exit(70)
 
+proc xAlive(): bool =
+  ## The X screen still answers (Termux:X11 or the display is still there).
+  var name = getEnv("DISPLAY")
+  if name.len == 0 and inTermux(): name = ":0"
+  let d = XOpenDisplay(name.cstring)
+  if d == nil: return false
+  discard XCloseDisplay(d)
+  true
+
+proc watchOver() =
+  ## The desktop runs in a child of this process, which watches it: when it
+  ## crashes (a fatal signal, an error no one caught) it starts again at
+  ## once and takes the programs' windows back -- nothing of theirs is lost.
+  ## Exit, a kill, or an X screen that is gone end this one too. Five
+  ## crashes in a minute: it stops trying. Returns in the child.
+  var crashes: seq[float]
+  while true:
+    let pid = fork()
+    if pid == 0: return                      # the desktop
+    if pid < 0: return                       # (no child: the desktop runs here, unwatched)
+    var status: cint
+    while waitpid(pid, status, 0) < 0 and errno == EINTR: discard
+    let signaled = WIFSIGNALED(status)
+    let code = if WIFEXITED(status): int(WEXITSTATUS(status)) else: -1
+    let sig = if signaled: int(WTERMSIG(status)) else: 0
+    let crashed = (signaled and sig in [int(SIGSEGV), int(SIGBUS), int(SIGFPE), int(SIGILL),
+                                        int(SIGABRT)]) or code == 70 or code == 1
+    if not crashed: quit(max(code, 0))
+    if not xAlive(): quit(code)              # (the X screen went: nothing to come back to)
+    let t = epochTime()
+    crashes.add t
+    while crashes.len > 0 and t - crashes[0] > 60: crashes.delete(0)
+    try:
+      stderr.writeLine(DesktopName & " stopped (" &
+                       (if signaled: "signal " & $sig else: "exit " & $code) &
+                       ") at " & $now() & ": started again")
+      stderr.flushFile()
+    except CatchableError: discard
+    if crashes.len >= 5: quit(70)
+    sleep(400)
+
 proc runSession*() =
   ## The desktop, until Exit.
   # (what goes wrong is kept: ~/.local/share/retrodesktop/desktop.log)
@@ -702,6 +743,7 @@ proc runSession*() =
     if getEnv("DISPLAY").len == 0: putEnv("DISPLAY", ":0")
     launch(selfCommand("progman"))
     return
+  watchOver()
   applyDesktopLook()
   openApp(DesktopName, 1024, 768, frame = wfSystem, userFrame = false, id = "retrodesktop")
   setTitle(DesktopName)
@@ -709,6 +751,10 @@ proc runSession*() =
   watchMemory()
   wm.changed = nil
   wm.taskList = openTaskList
+  wm.startMenu = proc (): bool {.nimcall.} =
+    if conf.setting("panel", "on") == "off": return false
+    programsMenu()
+    true
   wm.shortcut = onShortcut
   wm.keyboardChanged = proc () {.nimcall.} = drawPanel()
   wm.command = onCommand
@@ -726,8 +772,8 @@ proc runSession*() =
   managing = wm.start()
   if not managing: showNoWm = true
   else:
+    panelSettings(conf, layoutsOf(conf))
     showPanel(conf.setting("panel", "on") != "off")
-    panelSettings(true, conf.setting("clock24", "on") != "off", layoutsOf(conf))
   let d = Display(x11Display())
   if d != nil: applyLook(d)
   announceLook()
@@ -767,6 +813,9 @@ proc runSession*() =
       if started: keepSession()
       watchIdle()
       panelTick()
+      if managing:
+        let ms = wm.tick()
+        if ms > 0: wakeIn(ms)
       watchUpdates()
       # (night colors: the night's scheme from its hour, the day's after)
       if currentScheme(conf) != schemeNow: relook()

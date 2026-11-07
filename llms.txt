@@ -16,8 +16,9 @@ install or remove, apt-get underneath), `write` (Write), `clipboard`
 [topic]`, `tour`, `storage` (Android Files), `notify` (as notify-send),
 `sound EVENT`, `clock`, `calc`, `calendar`, `cardfile`, `charmap`,
 `pictures`, `pdf`, `media`, `recorder`, `camera`, `dialer` (Termux:API),
-`news`, `diskspace`, `share` (x11vnc). The desktop has a panel (Programs,
-the windows, the clock) and the Desktop folder's icons.
+`news`, `diskspace`, `share` (x11vnc), `taskbar` (Taskbar Properties). The
+desktop has a panel (Windows 95's taskbar: Start and its menu, the windows,
+the tray, the clock; on any edge) and the Desktop folder's icons.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
@@ -38,30 +39,44 @@ the windows, the clock) and the Desktop folder's icons.
   and the "Retro31" Xcursor theme in ~/.icons (retroui's
   `classicCursorArt`, written at 16-64 px).
 - The desktop's log: `~/.local/share/retrodesktop/desktop.log`; a crash
-  ends it at once (`_exit`), and a new start ends a desktop that does not
-  answer the ping and takes its windows.
+  ends it at once (`_exit`) and the session's supervisor (`watchOver`, a
+  fork) starts it again, which takes the windows (five in a minute at most);
+  a new start ends a desktop that does not answer the ping and takes its
+  windows.
 - Settings: retroui's `loadSettings("retrodesktop")` (scheme, desktopColor,
   pattern, wallpaper, wallpaperMode, font, fontFile, textScale, size, touch,
-  maximizeNew, linuxLook, wakeLock, startProgman, panel, backKey, night,
+  maximizeNew, linuxLook, wakeLock, startProgman, panel, panelEdge
+  (bottom/top/left/right), panelRows, panelWidth, panelAutoHide, panelOnTop,
+  startSmallIcons, panelClock, clock24, backKey, night,
   nightFrom, nightTo, nightScheme, language, feeds, vncPassword, layouts,
   layoutSwitch, repeatDelay, repeatRate, key.<action>, saverPassword (a
   salted SHA-256), updateChecked, hijri (on/off), hijriAdjust (-2..2)); Program
   Manager's items and windows in "retrodesktop-progman"; the desktop
   icons' places in "retrodesktop-icons".
-- The panel: `panel.nim`, an override-redirect window; the manager keeps it
-  over the windows (`wm.onTop`), leaves its height free (`wm.workBottom`,
-  `workArea()`), gives it its events (`wm.otherEvents`) and redraws it
-  when the windows change (`wm.refresh`).
+- The panel: `panel.nim`, an override-redirect window on any edge; the
+  manager keeps it over the windows (`wm.onTop`, unless Always on top is
+  off), leaves its room free (`wm.workInset`, `workRect()`; `workChanged()`
+  fits the windows again), gives it its events (`wm.otherEvents`) and
+  redraws it when the windows change (`wm.refresh`). Its Start menu is
+  `wm.showMenu(items, x, y, above, big)` with `MenuItem.sub` for the menus
+  beside; Ctrl+Esc asks `wm.startMenu`. Recent documents: common.nim's
+  `noteRecent` (from `open`), `recentDocuments`.
+- Snapping: zones are fractions of the work area (`Zone`), `layouts()` the
+  Windows 11 layouts; a window dragged to an edge or corner shows a preview
+  and snaps on release, then Snap Assist offers the others for the rest;
+  the layouts open on resting on the maximize button or with Win+Z; Win+
+  arrows follow Windows 11 (`winArrow`). Alt+drag moves (left button) or
+  sizes (right button).
 - Shortcuts: `wm.setShortcuts` (keyboard.nim's `DefaultShortcuts`, Control
-  Panel > Keyboard); the Windows key's are grabbed whole (alone: Programs);
-  the desktop's actions through `wm.shortcut`, the windows' (halves,
-  maximize, minimize, Win+D) in the manager.
+  Panel > Keyboard); the Windows key's are grabbed whole (alone: the Start
+  menu); the desktop's actions through `wm.shortcut`, the windows' (halves,
+  maximize, minimize, layouts, Win+D) in the manager.
 - A program's failure: `crash.nim` (`watchCrashes(role)`, `retro-desktop
   crash ROLE`), kept in crashes.log.
 - Arabic: `ar.nim`'s `desktopArabic` with retroui's `toolkitArabic`
   (`setUiLanguage`); the manager draws titles and menus through `tr`; the
-  panel is mirrored (`panel.nim`'s `mx`: laid out from the left, drawn from
-  the right; events turned back with `fromScreen`); Help shows
+  panel is mirrored along the bottom or the top (Start at the right, the
+  tray at the left; its menus open leftwards); Help shows
   `helpar.nim`'s topics.
 - Write's Word documents: `docx.nim` (`readDocx`, `docxOf`); the Hijri
   date: `hijri.nim` (`hijriText`, common.nim's `hijriLine` with the
@@ -77,10 +92,12 @@ the windows, the clock) and the Desktop folder's icons.
   alternate screen) and `terminal.nim` (a pseudo-terminal, a reader thread
   that wakes the window with an X ClientMessage, drawing in the CGA colors).
 - Menus over the windows (the desktop's, the icons', the control menu, the
-  panel's Programs) are `wm.showMenu(items, x, y)`: an override-redirect
-  window with the pointer and the keyboard grabbed; letters, arrows, Enter,
-  Esc; `menuItem(label, keys, enabled, action, icon)` (a picture at
-  `menuIconSize()` pixels).
+  panel's Start menu) are `wm.showMenu(items, x, y)`: override-redirect
+  windows with the pointer and the keyboard grabbed; letters, arrows (Right
+  opens the menu beside, Left closes it), Enter, Esc; `menuItem(label,
+  keys, enabled, action, icon, sub)` (a picture at `menuIconSize()` pixels,
+  `menuBigIconSize()` in the Start menu; `sub` makes the items of the menu
+  that opens beside it).
 - The screen's size is the root window's, from its ConfigureNotify
   (`wm.screenSize`), never Xlib's DisplayWidth (the size the connection
   began with: Termux:X11 changes it after the start).

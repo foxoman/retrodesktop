@@ -32,31 +32,84 @@ type Mpv = object
   buf: string
   path: string
 
+proc endLeftOver() =
+  ## An mpv a Media Player left when it was killed (its player gone): told
+  ## to quit, its socket taken away.
+  for kind, p in walkDir(getTempDir()):
+    let name = p.extractFilename
+    if not name.startsWith("retro-mpv-"): continue
+    let pid = try: parseInt(name["retro-mpv-".len .. ^1]) except ValueError: -1
+    if pid <= 0 or dirExists("/proc/" & $pid): continue
+    var s: Socket
+    try:
+      s = newSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP, buffered = false)
+      s.connectUnix(p)
+      s.send($(%*{"command": ["quit"]}) & "\n")
+    except CatchableError: discard
+    if s != nil:
+      try: s.close() except CatchableError: discard
+    try: removeFile(p) except CatchableError: discard
+
 proc start(m: var Mpv): bool =
   let exe = findExe("mpv")
   if exe.len == 0: return false
+  endLeftOver()
   m.path = getTempDir() / "retro-mpv-" & $getCurrentProcessId()
   removeFile(m.path)
-  m.p = startProcess(exe, args = ["--idle=yes", "--no-terminal", "--force-window=no",
-                     "--input-ipc-server=" & m.path, "--title=${media-title} - Media Player"],
-                     options = {poDaemon})
-  for _ in 0 ..< 40:
-    if fileExists(m.path) or symlinkExists(m.path):
-      try:
-        m.sock = newSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP, buffered = false)
-        m.sock.connectUnix(m.path)
-        for (id, prop) in [(1, "time-pos"), (2, "duration"), (3, "pause"), (4, "media-title"),
-                           (5, "idle-active"), (6, "volume")]:
-          m.sock.send($(%*{"command": ["observe_property", id, prop]}) & "\n")
-        return true
-      except CatchableError: discard
+  var args = @["--idle=yes", "--no-terminal", "--force-window=no", "--input-ipc-server=" & m.path,
+               "--title=${media-title} - Media Player",
+               # (a song's cover is not shown in a window of its own: the
+               # player shows the song)
+               "--audio-display=no"]
+  # (the picture through EGL on X11 when this mpv has it, else X11's own:
+  # left to find one, mpv tried the others first, and one of them closed
+  # file 0 again and again -- the X connection, once it was given that
+  # number, and mpv ended on the next video)
+  let known = try: execProcess(exe, args = ["--gpu-context=help"], options = {poStdErrToStdOut}) &
+                   execProcess(exe, args = ["--vo=help"], options = {poStdErrToStdOut})
+              except CatchableError: ""
+  if "x11egl" in known: args.add "--gpu-context=x11egl"
+  if "\n  x11 " in known: args.add "--vo=gpu,x11,"
+  m.p = startProcess(exe, args = args, options = {poDaemon})
+  # (mpv's socket is not a file: `fileExists` is false for it, so it is
+  # only tried until it answers)
+  for _ in 0 ..< 50:
+    if not m.p.running: break
+    var s: Socket
+    try:
+      s = newSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP, buffered = false)
+      s.connectUnix(m.path)
+      m.sock = s
+      for (id, prop) in [(1, "time-pos"), (2, "duration"), (3, "pause"), (4, "media-title"),
+                         (5, "idle-active"), (6, "volume")]:
+        m.sock.send($(%*{"command": ["observe_property", id, prop]}) & "\n")
+      return true
+    except CatchableError:
+      if s != nil:
+        try: s.close() except CatchableError: discard
+      m.sock = nil
     sleep(100)
+  # (it never answered: it goes, and the player says so)
+  if m.p != nil:
+    m.p.terminate()
+    discard m.p.waitForExit(1000)
+    m.p.close()
+    m.p = nil
   false
+
+proc lose(m: var Mpv) =
+  ## mpv went (it ended, or was ended): its socket closed; the player starts
+  ## it again.
+  if m.sock != nil:
+    try: m.sock.close() except CatchableError: discard
+    m.sock = nil
 
 proc cmd(m: var Mpv; args: JsonNode) =
   if m.sock != nil:
-    try: m.sock.send($(%*{"command": args}) & "\n")
-    except CatchableError: discard
+    # (no SafeDisconn: with it Nim's send took a socket mpv had closed for
+    # one that only waits, and tried again forever -- the player hung)
+    try: m.sock.send($(%*{"command": args}) & "\n", flags = {})
+    except CatchableError: m.lose()
 
 proc events(m: var Mpv): seq[JsonNode] =
   if m.sock == nil: return
@@ -64,7 +117,10 @@ proc events(m: var Mpv): seq[JsonNode] =
   while poll(addr fds[0], 1, 0) > 0:
     var data = newString(8192)
     let n = try: m.sock.recv(addr data[0], data.len) except CatchableError: -1
-    if n <= 0: break
+    if n <= 0:
+      # (readable, and nothing: mpv closed its end)
+      m.lose()
+      break
     data.setLen(n)
     m.buf.add data
   while true:
@@ -81,7 +137,9 @@ proc stop(m: var Mpv) =
     try: m.sock.close() except CatchableError: discard
     m.sock = nil
   if m.p != nil:
-    discard m.p.waitForExit(1500)
+    if m.p.waitForExit(1500) == -1 or m.p.running:
+      m.p.terminate()
+      discard m.p.waitForExit(1000)
     m.p.close()
     m.p = nil
   removeFile(m.path)
@@ -119,8 +177,20 @@ proc runMedia*(args: seq[string]) =
     m.cmd(%*["loadfile", list[i], "replace"])
     m.cmd(%*["set_property", "pause", false])
   if args.len > 0 and list.len > 0: play(list.len - 1)
+  var restarts: seq[float]
   while beginFrame():
     helpKeys("media")
+    if have and m.sock == nil and m.p != nil:
+      # (mpv ended by itself: started again -- three times a minute at most)
+      let t = epochTime()
+      while restarts.len > 0 and t - restarts[0] > 60: restarts.delete(0)
+      m.stop()
+      if restarts.len < 3:
+        restarts.add t
+        discard m.start()
+      at = -1
+      pos = 0
+      paused = false
     for e in m.events():
       if e{"event"}.getStr == "property-change":
         case e{"name"}.getStr
@@ -157,15 +227,18 @@ proc runMedia*(args: seq[string]) =
     var p = int(if length > 0: pos / length * 1000 else: 0)
     if slider(p, 0, 1000) and length > 0: m.cmd(%*["seek", float(p) / 1000 * length, "absolute"])
     row:
-      if button("|<", enabled = at > 0): play(at - 1)
-      if button(if at >= 0 and not paused: "Pause" else: "Play", isDefault = true, enabled = have and list.len > 0):
+      # (narrow buttons: the row fits the window, no scroll bar under it)
+      let bw = dp(46)
+      if button("|<", enabled = at > 0, w = bw): play(at - 1)
+      if button(if at >= 0 and not paused: "Pause" else: "Play", isDefault = true, enabled = have and list.len > 0,
+                w = dp(60)):
         if at < 0: play(max(0, sel))
         else: m.cmd(%*["cycle", "pause"])
-      if button("Stop", enabled = at >= 0):
+      if button("Stop", enabled = at >= 0, w = dp(60)):
         m.cmd(%*["stop"])
         at = -1
         pos = 0
-      if button(">|", enabled = at >= 0 and at + 1 < list.len): play(at + 1)
+      if button(">|", enabled = at >= 0 and at + 1 < list.len, w = bw): play(at + 1)
       spring()
       label("Volume")
       if slider(volume, 0, 130, w = dp(90)): m.cmd(%*["set_property", "volume", volume])
@@ -216,6 +289,12 @@ proc runRecorder*() =
   var showAbout = false
   var said = if termuxMic or pulse or alsa: "" else:
                "Recording needs Termux:API (Setup > System > Termux:API tools) or PulseAudio."
+  # (Termux:API answers through its Android app, which can take a while --
+  # asking for the microphone -- or never, when the app is missing: asked in
+  # the background, so the window always answers)
+  var micJob: Task
+  var micAsked = 0.0
+  var micStopping = false
   proc list() =
     files = @[]
     for kind, p in walkDir(recordingsDir()):
@@ -225,15 +304,38 @@ proc runRecorder*() =
   proc stopRecording() =
     if not recording: return
     recording = false
-    if termuxMic: discard execShellCmd("termux-microphone-record -q >/dev/null 2>&1")
+    if termuxMic:
+      if micJob != nil: micJob.stop()
+      micJob = run("termux-microphone-record -q")
+      micAsked = epochTime()
+      micStopping = true
     elif rec != nil:
       rec.terminate()
       discard rec.waitForExit(2000)
       rec.close()
       rec = nil
-    sleep(300)
-    list()
-    sel = 0
+      list()
+      sel = 0
+  proc micAnswered() =
+    ## Termux:API's answer to a start or a stop.
+    if micJob == nil: return
+    if micJob.check():
+      let o = micJob.output.strip
+      let failed = micJob.code != 0 or "error" in o.toLowerAscii or "denied" in o.toLowerAscii
+      if failed and not micStopping:
+        recording = false
+        said = if o.len > 0: o.splitLines[0] else: "The microphone could not be started."
+      micJob = nil
+      if micStopping:
+        micStopping = false
+        list()
+        sel = 0
+    elif epochTime() - micAsked > 10:
+      micJob.stop()
+      micJob = nil
+      if not micStopping: recording = false
+      micStopping = false
+      said = "Termux:API does not answer: install the Termux:API app and allow it the microphone."
   proc playIt(f: string) =
     if player != nil: player.stop()
     if findExe("mpv").len > 0: player = run("mpv --no-video --really-quiet " & quoteShell(f))
@@ -242,6 +344,15 @@ proc runRecorder*() =
   while beginFrame():
     helpKeys("recorder")
     if player != nil and player.check(): player = nil
+    micAnswered()
+    if micJob != nil: wakeIn(200)
+    if recording and rec != nil and not rec.running:
+      # (parecord or arecord ended by itself: no sound server, no device)
+      recording = false
+      said = "The recording stopped: " & (if pulse: "PulseAudio" else: "ALSA") & " has no microphone here."
+      rec.close()
+      rec = nil
+      list()
     menubar:
       menu "&File":
         if menuItem("&Send to Android...", enabled = sel in 0 ..< files.len and findExe("termux-share").len > 0):
@@ -272,13 +383,16 @@ proc runRecorder*() =
     if recording: wakeIn(60)
     row:
       if button(if recording: "Stop" else: "Record", isDefault = true,
-                enabled = termuxMic or pulse or alsa):
+                enabled = (termuxMic or pulse or alsa) and micJob == nil):
         if recording: stopRecording()
         else:
           let stamp = now().format("yyyy-MM-dd' 'HH.mm.ss")
+          said = ""
           if termuxMic:
             file = recordingsDir() / "Recording " & stamp & ".m4a"
-            discard execShellCmd("termux-microphone-record -f " & quoteShell(file) & " -e aac -l 0 >/dev/null 2>&1")
+            micJob = run("termux-microphone-record -f " & quoteShell(file) & " -e aac -l 0")
+            micAsked = epochTime()
+            micStopping = false
           else:
             file = recordingsDir() / "Recording " & stamp & ".wav"
             rec = if pulse: startProcess("parecord", args = ["--file-format=wav", file], options = {poUsePath})
@@ -292,10 +406,20 @@ proc runRecorder*() =
     for f in files: names.add f.splitFile.name
     if listbox(names, sel, rows = max(3, (remainingH() - lineHeight() - Gap) div ItemH)) and ui.clicks >= 2 and
        sel in 0 ..< files.len: playIt(files[sel])
-    label("In " & recordingsDir(), enabled = false)
+    # (one line: the home folder as ~, a long path cut)
+    var dir = recordingsDir()
+    let home = getHomeDir().strip(leading = false, chars = {'/'})
+    if dir.startsWith(home & "/"): dir = "~" & dir[home.len .. ^1]
+    label(ellipsize("In " & dir, ui.w - 3 * Pad), enabled = false)
     aboutBox(showAbout, "Sound Recorder", DesktopVersion, ["Your voice, recorded.", "Part of " & DesktopName & "."])
     endFrame()
     appFrameDone()
   stopRecording()
+  if micJob != nil:
+    # (the stop asked: waited for a moment, so the recording is kept)
+    for _ in 0 ..< 30:
+      if micJob.check(): break
+      sleep(100)
+    micJob.stop()
   if player != nil: player.stop()
   closeApp()

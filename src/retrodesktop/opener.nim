@@ -137,6 +137,7 @@ proc runOpen*(args: seq[string]) =
   if not target.contains("://") and not target.startsWith("mailto:") and
      (fileExists(target) or dirExists(target)):
     target = absolutePath(target)
+  if fileExists(target): noteRecent(target)
   readMimeTypes()
   let kind = kindOf(target)
   let ext = if kind.startsWith("x-scheme-handler/"): kind else: target.splitFile.ext.toLowerAscii

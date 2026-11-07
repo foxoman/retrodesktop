@@ -35,6 +35,11 @@ type
     saved: tuple[x, y, w, h: int]
     transient*: Window
     canDelete, takeFocus, noInput, fixed: bool
+      ## (`fixed`: the program asked for one size -- it can still be sized,
+      ## no smaller than that)
+    splash*: bool              ## a splash screen: not sized, no buttons
+    zoned*: bool               ## snapped to a part of the screen (`zone`)
+    zone*: Zone
     posGiven: bool             ## the program said where its window goes
     dialog*: bool              ## a dialog (centered when it belongs to no window)
     minW, minH: int
@@ -46,24 +51,34 @@ type
 
   DragKind = enum dkNone, dkMove, dkResize, dkButton
 
-  MenuItem* = tuple[label, keys: string; enabled: bool; action: proc (); icon: Bitmap]
+  Zone* = tuple[x0, y0, x1, y1: float]
+    ## A part of the work area, as fractions of it (the left half: 0, 0, 0.5, 1).
+
+  MenuItem* = object
+    label*, keys*: string
+    enabled*: bool
+    action*: proc ()
+    icon*: Bitmap
+    sub*: proc (): seq[MenuItem]
     ## A menu's item: its label ("&" before the letter to underline; "" a
     ## line between groups), its keys, whether it can be chosen, what it does,
-    ## its picture (nil: none; `menuIconSize` pixels).
+    ## its picture (nil: none; `menuIconSize` pixels), the items of the menu
+    ## it opens beside it (nil: none).
 
 var
   dpy*: Display
   scr: cint
-  root*, desk*, checkWin, menuWin: Window
+  root*, desk*, checkWin: Window
   clients*: seq[Client]          ## bottom to top
   active*: Client
   desktopShown: seq[Client]      # (Win+D: the windows it minimized, to bring back)
-  halves: seq[tuple[c: Client; side: int]]   # (windows put on a half of the screen)
   gc: pointer
   running*: bool
   otherWm: bool
   changed*: proc () {.nimcall.}  ## the desktop should draw again (icons)
-  taskList*: proc () {.nimcall.} ## Ctrl+Esc
+  taskList*: proc () {.nimcall.} ## Task List (Ctrl+Esc when there is no Start menu)
+  startMenu*: proc (): bool {.nimcall.}
+    ## Ctrl+Esc: the panel's Start menu (false: no panel, Task List then)
   keyboardChanged*: proc () {.nimcall.}
     ## the layout typing changed (the panel's mark follows)
   xkbBase = -1.cint               # (XKB's first event number)
@@ -86,8 +101,6 @@ var
   fleur: culong
   shownCursor: Table[Window, Part]
   cascadeAt = 0
-  menu: tuple[c: Client; items: seq[MenuItem]; hot: int; x, y, w, h, itemH: int;
-              fromX, fromY: int; armed: bool; iconW: int]
   switchWin: Window              # Alt+Tab's box (None: not shown)
   backKey = 0                    # Android's Back (XF86Back), 0 when the keyboard has none
   backCloses = false             # ... closes the window in front (Control Panel > Windows)
@@ -146,15 +159,23 @@ proc readScreenSize() =
     screenH = int(a.height)
 
 var
-  workBottom*: int               ## pixels at the bottom kept for the panel
+  workInset*: tuple[left, top, right, bottom: int]
+    ## pixels kept at each edge of the screen (the panel's, on the edge it is on)
   onTop*: seq[Window]            ## windows kept over the programs' (the panel)
   otherEvents*: proc (p: pointer): bool {.nimcall.}
     ## the events of windows of the desktop's own besides these (the panel's)
 
-proc workArea*(): tuple[w, h: int] =
+proc workRect*(): tuple[x, y, w, h: int] =
   ## The screen less the panel: where windows go, maximized windows too.
   let (sw, sh) = screenSize()
-  (sw, max(1, sh - workBottom))
+  let x = clamp(workInset.left, 0, max(0, sw - 1))
+  let y = clamp(workInset.top, 0, max(0, sh - 1))
+  (x, y, max(1, sw - x - workInset.right), max(1, sh - y - workInset.bottom))
+
+proc workArea*(): tuple[w, h: int] =
+  ## The work area's size (`workRect`).
+  let r = workRect()
+  (r.w, r.h)
 
 proc titleColors(c: Client): tuple[bg, fg: Color] =
   let t = ui.theme
@@ -181,7 +202,7 @@ proc putBitmap*(w: Window; b: Bitmap; x, y: int) =
   img.data = nil                         # (the pixels are the canvas's)
   discard XFree(img)
 
-proc hasButtons(c: Client): bool = c.transient == None and not c.fixed
+proc hasButtons(c: Client): bool = c.transient == None and not c.splash
 
 proc triangle(cv: Canvas2D; cx, cy, s: float; up: bool) =
   cv.beginPath()
@@ -235,7 +256,7 @@ proc drawFrame*(c: Client) =
   fillX(f, b - 1, fh - b, fw - 2 * b + 2, 1, t.frame)
   fillX(f, b - 1, b - 1, 1, fh - 2 * b + 2, t.frame)
   fillX(f, fw - b, b - 1, 1, fh - 2 * b + 2, t.frame)
-  if not c.fixed and not c.maximized:
+  if not c.splash and not c.maximized:
     let cz = b + th
     for y in [cz, fh - cz - 1]:
       fillX(f, 0, y, b, 1, t.frame)
@@ -341,7 +362,12 @@ proc readHints(c: Client) =
       c.minH = int(hints.minHeight)
     if (hints.flags and PMinSize) != 0 and (hints.flags and PMaxSize) != 0 and
        hints.minWidth == hints.maxWidth and hints.minHeight == hints.maxHeight and hints.minWidth > 0:
+      # (one size asked for: every window can be sized here all the same --
+      # a dialog larger than a phone's screen too -- so its least size is
+      # no more than any window's)
       c.fixed = true
+      c.minW = 0
+      c.minH = 0
   c.minW = max(c.minW, dpx(60))
   c.minH = max(c.minH, dpx(20))
   let tr = propLongs(dpy, c.win, XA_WM_TRANSIENT_FOR, XA_WINDOW)
@@ -432,24 +458,42 @@ proc applyGeometry(c: Client) =
   sendConfigure(c)
 
 proc maximizeGeometry(c: Client) =
-  let (sw, sh) = workArea()
-  c.x = -bw()
-  c.y = -bw()
-  c.w = sw
-  c.h = sh - tbh() - 1
+  let r = workRect()
+  c.x = r.x - bw()
+  c.y = r.y - bw()
+  c.w = r.w
+  c.h = r.h - tbh() - 1
+
+proc zoneRect*(z: Zone): tuple[x, y, w, h: int] =
+  ## Where zone `z` of the work area is on the screen.
+  let r = workRect()
+  let x0 = r.x + int(round(z.x0 * float(r.w)))
+  let x1 = r.x + int(round(z.x1 * float(r.w)))
+  let y0 = r.y + int(round(z.y0 * float(r.h)))
+  let y1 = r.y + int(round(z.y1 * float(r.h)))
+  (x0, y0, x1 - x0, y1 - y0)
+
+proc zoneGeometry(c: Client; z: Zone) =
+  ## The frame of `c` filling zone `z`.
+  let r = zoneRect(z)
+  c.x = r.x
+  c.y = r.y
+  c.w = max(c.minW, r.w - 2 * bw())
+  c.h = max(c.minH, r.h - bw() - topOf())
 
 proc fitOnScreen(c: Client) =
   ## Keeps the frame on the screen: no larger than it, its title bar in it.
-  let (sw, sh) = workArea()
-  c.w = clamp(c.w, 1, max(1, sw - 2 * bw()))
-  c.h = clamp(c.h, 1, max(1, sh - bw() - topOf()))
-  c.x = clamp(c.x, -(c.frameW - dpx(60)), sw - dpx(60))
-  c.y = clamp(c.y, 0, max(0, sh - topOf()))
+  let r = workRect()
+  c.w = clamp(c.w, 1, max(1, r.w - 2 * bw()))
+  c.h = clamp(c.h, 1, max(1, r.h - bw() - topOf()))
+  c.x = clamp(c.x, r.x - (c.frameW - dpx(60)), r.x + r.w - dpx(60))
+  c.y = clamp(c.y, r.y, max(r.y, r.y + r.h - topOf()))
 
 proc place(c: Client; x, y: int; given: bool) =
   ## Where a new window goes: where it asks, over the window it belongs to
   ## (a dialog), else the next step of a cascade from the top left.
-  let (sw, sh) = workArea()
+  let wr = workRect()
+  let (sw, sh) = (wr.w, wr.h)
   let parent = findClient(c.transient)
   if parent != nil:
     c.x = parent.x + (parent.frameW - c.frameW) div 2
@@ -458,14 +502,14 @@ proc place(c: Client; x, y: int; given: bool) =
     c.x = x - bw()
     c.y = y - topOf()
   elif c.dialog:
-    c.x = (sw - c.frameW) div 2
-    c.y = (sh - c.frameH) div 3
+    c.x = wr.x + (sw - c.frameW) div 2
+    c.y = wr.y + (sh - c.frameH) div 3
   else:
     let step = topOf()
     let (aw, ah) = (c.frameW, c.frameH)
     if aw >= sw * 9 div 10 or ah >= sh * 9 div 10:
-      c.x = (sw - aw) div 2
-      c.y = (sh - ah) div 2
+      c.x = wr.x + (sw - aw) div 2
+      c.y = wr.y + (sh - ah) div 2
     else:
       c.x = dpx(16) + cascadeAt * step
       c.y = dpx(16) + cascadeAt * step
@@ -474,6 +518,8 @@ proc place(c: Client; x, y: int; given: bool) =
         c.x = dpx(16)
         c.y = dpx(16)
       inc cascadeAt
+      c.x += wr.x
+      c.y += wr.y
   fitOnScreen(c)
 
 # ---- focus and order --------------------------------------------------------------------------------
@@ -619,6 +665,12 @@ proc restore*(c: Client) =
     setWmState(c, 1)
   elif c.maximized:
     c.maximized = false
+    if c.zoned: zoneGeometry(c, c.zone)
+    else: (c.x, c.y, c.w, c.h) = c.saved
+    applyGeometry(c)
+  elif c.zoned:
+    # (snapped: back to its size before)
+    c.zoned = false
     (c.x, c.y, c.w, c.h) = c.saved
     applyGeometry(c)
   setNetState(c)
@@ -628,12 +680,12 @@ proc restore*(c: Client) =
 
 proc maximize*(c: Client) =
   ## The window as large as the screen (its border off it).
-  if c == nil or c.fixed or c.transient != None: return
+  if c == nil or c.splash or c.transient != None: return
   if c.maximized:
     restore(c)
     return
   if c.iconic: restore(c)
-  c.saved = (c.x, c.y, c.w, c.h)
+  if not c.zoned: c.saved = (c.x, c.y, c.w, c.h)
   c.maximized = true
   playSound("maximize")
   maximizeGeometry(c)
@@ -645,11 +697,12 @@ proc maximize*(c: Client) =
 proc setFullscreen(c: Client; on: bool) =
   if on == c.fullscreen: return
   if on:
-    if not c.maximized: c.saved = (c.x, c.y, c.w, c.h)
+    if not c.maximized and not c.zoned: c.saved = (c.x, c.y, c.w, c.h)
     c.fullscreen = true
   else:
     c.fullscreen = false
     if c.maximized: maximizeGeometry(c)
+    elif c.zoned: zoneGeometry(c, c.zone)
     else: (c.x, c.y, c.w, c.h) = c.saved
   applyGeometry(c)
   setNetState(c)
@@ -664,15 +717,17 @@ proc iconicClients*(): seq[Client] =
 proc cascade*() =
   ## The windows one over another, from the top left.
   cascadeAt = 0
-  let (sw, sh) = workArea()
+  let wr = workRect()
+  let (sw, sh) = (wr.w, wr.h)
   for c in snapshot():
     if c.iconic or c.fullscreen or c.transient != None: continue
     if c.maximized:
       c.maximized = false
+    c.zoned = false
     c.w = min(c.w, sw * 2 div 3)
     c.h = min(c.h, sh * 2 div 3)
-    c.x = dpx(16) + cascadeAt * topOf()
-    c.y = dpx(16) + cascadeAt * topOf()
+    c.x = wr.x + dpx(16) + cascadeAt * topOf()
+    c.y = wr.y + dpx(16) + cascadeAt * topOf()
     inc cascadeAt
     fitOnScreen(c)
     applyGeometry(c)
@@ -681,22 +736,25 @@ proc cascade*() =
     drawFrame(c)
   if active != nil: focus(active)
 
-proc tile*() =
-  ## The windows side by side, filling the screen.
+proc tile*(across = false; down = false) =
+  ## The windows side by side, filling the screen (`across`: one above
+  ## another, as 95's Tile Horizontally; `down`: in a row, Tile Vertically).
   var l: seq[Client]
   for c in snapshot():
-    if not c.iconic and not c.fullscreen and c.transient == None and not c.fixed: l.add c
+    if not c.iconic and not c.fullscreen and c.transient == None and not c.splash: l.add c
   if l.len == 0: return
-  let (sw, sh) = workArea()
-  let cols = int(ceil(sqrt(float(l.len))))
+  let wr = workRect()
+  let (sw, sh) = (wr.w, wr.h)
+  let cols = if across: 1 elif down: l.len else: int(ceil(sqrt(float(l.len))))
   let rows = (l.len + cols - 1) div cols
-  let reserve = if iconicClients().len > 0: dpx(76) else: 0
+  let reserve = if iconicClients().len > 0 and workInset == (0, 0, 0, 0): dpx(76) else: 0
   for i, c in l:
     let col = i mod cols
     let row = i div cols
     c.maximized = false
-    c.x = col * sw div cols
-    c.y = row * (sh - reserve) div rows
+    c.zoned = false
+    c.x = wr.x + col * sw div cols
+    c.y = wr.y + row * (sh - reserve) div rows
     c.w = sw div cols - 2 * bw()
     c.h = (sh - reserve) div rows - bw() - topOf()
     applyGeometry(c)
@@ -847,7 +905,7 @@ proc snapped(c: Client; x, y: int): (int, int) =
   ## A frame moved near an edge of the screen or of another window: against
   ## it (side by side, or lined up), as a finger cannot place it to the pixel.
   let near = dpx(if bigFrames: 16 else: 10)
-  let (sw, sh) = workArea()
+  let wr = workRect()
   let fw = c.frameW
   let fh = c.frameH
   var bx = x
@@ -862,10 +920,10 @@ proc snapped(c: Client; x, y: int): (int, int) =
     if abs(target - edge) < dy:
       dy = abs(target - edge)
       by = y + target - edge
-  tryX(x, 0)
-  tryX(x + fw, sw)
-  tryY(y, 0)
-  tryY(y + fh, sh)
+  tryX(x, wr.x)
+  tryX(x + fw, wr.x + wr.w)
+  tryY(y, wr.y)
+  tryY(y + fh, wr.y + wr.h)
   for o in clients:
     if o == c or o.iconic or o.fullscreen or o.maximized: continue
     let ow = o.frameW
@@ -882,208 +940,935 @@ proc snapped(c: Client; x, y: int): (int, int) =
       tryY(y + fh, o.y + oh)
   (bx, by)
 
-# ---- the control menu -------------------------------------------------------------------------------
+# ---- menus -----------------------------------------------------------------------------------------
+#
+# The menus the manager shows on its own windows (override-redirect, over
+# every program): a window's control menu, the desktop's, the panel's Start
+# menu and its other menus. A menu can open others beside it -- an item with
+# `sub` -- as Windows 95's do: the pointer resting on the item opens it (a
+# moment later, so a pointer on its way to it does not close it), a click
+# opens it at once, Right and Left go in and out, Esc closes one, a click
+# outside all of them closes them all. They keep 3.1's look -- white, a
+# black line, the selection navy; the first menu of the Start menu has a
+# band down its side and large pictures, as 95's has.
+
+type
+  MenuLevel = object
+    win: Window
+    items: seq[MenuItem]
+    hot: int                     ## the item under the pointer or the keys (-1 none)
+    x, y, w, h: int
+    itemH, iconW, iconSize, band: int
+    opened: int                  ## the item whose menu is open beside this one (-1 none)
+
+var
+  levels: seq[MenuLevel]         ## the menus open, the first the one shown first
+  menuClient: Client             ## the window a control menu is for
+  menuBig = false                ## the first menu's large pictures and band
+  menuArmed = false
+  menuFrom: tuple[x, y: int]     ## where the pointer was when it opened
+  menuDue = 0.0                  ## when the item rested on opens (or the menu beside closes)
+  menuDueLevel = -1
+  menuButton*: tuple[x, y, w, h: int]
+    ## the button that opened the menu (the panel's Start): a press on it
+    ## closes the menu and does not open it again
+  menuClosedAt*: float           ## when a press on `menuButton` closed it
+  menuClosed*: proc () {.nimcall.}
+    ## told when the menus close (the panel lets its button up)
+
+proc menuOpen*(): bool = levels.len > 0
+  ## A menu is shown.
+
+proc isMenuWin(w: Window): bool =
+  if w == None: return false
+  for l in levels:
+    if l.win == w: return true
+
+proc closeLevels(fromLevel: int) =
+  ## The menus from `fromLevel` on closed (0: all of them).
+  var i = levels.high
+  while i >= max(0, fromLevel):
+    discard XDestroyWindow(dpy, levels[i].win)
+    dec i
+  levels.setLen(max(0, fromLevel))
+  if levels.len > 0: levels[^1].opened = -1
+  menuDueLevel = -1
 
 proc closeMenu*() =
-  ## The menu that is open (the control menu, the desktop's) closed.
-  if menuWin != None:
-    discard XUngrabPointer(dpy, CurrentTime)
-    discard XUngrabKeyboard(dpy, CurrentTime)
-    discard XDestroyWindow(dpy, menuWin)
-    menuWin = None
-    menu.items = @[]
+  ## The menus that are open (a control menu, the desktop's, the Start
+  ## menu) closed.
+  if levels.len == 0: return
+  discard XUngrabPointer(dpy, CurrentTime)
+  discard XUngrabKeyboard(dpy, CurrentTime)
+  closeLevels(0)
+  menuClient = nil
+  if menuClosed != nil:
+    let f = menuClosed
+    menuClosed = nil
+    f()
 
 proc menuIconSize*(): int =
   ## The size of a menu item's picture (the screen's pixels).
   max(16, dpx(if bigFrames: 32 else: 22)) - dpx(6)
 
-proc drawMenu() =
-  if menuWin == None: return
+proc menuBigIconSize*(): int =
+  ## The size of the Start menu's large pictures.
+  dpx(if bigFrames: 40 else: 32)
+
+proc itemHeight(l: MenuLevel; it: MenuItem): int =
+  if it.label.len == 0: max(dpx(8), l.itemH div 3) else: l.itemH
+
+proc drawLevel(i: int) =
+  if i < 0 or i >= levels.len: return
+  let l = levels[i]
   let t = ui.theme
-  let cv = newCanvas2D(menu.w, menu.h)
+  let cv = newCanvas2D(l.w, l.h)
   cv.fillStyle = t.frame
-  cv.fillRect(0, 0, float(menu.w), float(menu.h))
+  cv.fillRect(0, 0, float(l.w), float(l.h))
   cv.fillStyle = t.window
-  cv.fillRect(1, 1, float(menu.w - 2), float(menu.h - 2))
-  let px = max(9, int(round(float(menu.itemH) * 0.5)))
+  cv.fillRect(1, 1, float(l.w - 2), float(l.h - 2))
+  let rtl = ui.rtl
+  # (the Start menu's band down its side, in the title bars' color; no words on it)
+  if l.band > 0:
+    cv.fillStyle = t.select
+    let bx = if rtl: l.w - 1 - l.band else: 1
+    cv.fillRect(float(bx), 1, float(l.band), float(l.h - 2))
+  let left = 3 + (if rtl: 0 else: l.band)
+  let right = l.w - 3 - (if rtl: l.band else: 0)
+  let px = max(9, int(round(float(min(l.itemH, dpx(if bigFrames: 32 else: 22))) * 0.5)))
   cv.font = $px & "px sans-serif"
   cv.textBaseline = "middle"
-  var y = 2
-  for i, it in menu.items:
+  var y = 3
+  for k, it in l.items:
+    let ih = itemHeight(l, it)
     if it.label.len == 0:
       cv.fillStyle = t.frame
-      cv.fillRect(1, float(y + menu.itemH div 4), float(menu.w - 2), 1)
-      y += menu.itemH div 2
+      cv.fillRect(float(left - 2), float(y + ih div 2), float(right - left + 4), 1)
+      y += ih
       continue
-    let hot = i == menu.hot and it.enabled
+    let hot = (k == l.hot or k == l.opened) and it.enabled
     if hot:
       cv.fillStyle = t.select
-      cv.fillRect(2, float(y), float(menu.w - 4), float(menu.itemH))
+      cv.fillRect(float(left), float(y), float(right - left), float(ih))
     let ink = if not it.enabled: t.gray elif hot: t.selectText else: t.text
-    cv.fillStyle = ink
-    let ty = float(y + menu.itemH div 2)
+    let ty = float(y + ih div 2)
     if it.icon != nil:
-      let isz = menuIconSize()
-      let ix = if ui.rtl: menu.w - dpx(6) - isz else: dpx(6)
-      cv.drawImage(it.icon, float(ix), float(y + (menu.itemH - isz) div 2), float(isz), float(isz))
-    if ui.rtl:
-      # (right to left, as the interface: the label at the right, the keys at the left)
-      cv.textAlign = "right"
-      cv.fillText(it.label.replace("&", ""), float(menu.w - dpx(14) - menu.iconW), ty)
-      if it.keys.len > 0:
+      let isz = l.iconSize
+      let ix = if rtl: right - dpx(4) - isz else: left + dpx(4)
+      cv.drawImage(it.icon, float(ix), float(y + (ih - isz) div 2), float(isz), float(isz))
+    let shown = it.label.replace("&&", "\1").replace("&", "").replace("\1", "&")
+    let amp = block:
+      var a = -1
+      var j = 0
+      var n = 0
+      while j < it.label.len:
+        if it.label[j] == '&' and j + 1 < it.label.len and it.label[j + 1] != '&':
+          a = n
+          break
+        if it.label[j] == '&' and j + 1 < it.label.len: inc j
+        inc j
+        inc n
+      a
+    let pad = if l.iconW > 0: l.iconW + dpx(8) else: dpx(14)
+    let arrowW = dpx(16)
+    template label(at: float; align: string) =
+      cv.textAlign = align
+      cv.fillStyle = ink
+      cv.fillText(shown, at, ty)
+    if rtl:
+      label(float(right - pad), "right")
+      if it.keys.len > 0 and it.sub == nil:
         cv.textAlign = "left"
-        cv.fillText(it.keys, float(dpx(10)), ty)
-      y += menu.itemH
-      continue
-    cv.textAlign = "left"
-    # (the letter after "&" underlined, as 3.1's menus have it)
-    let amp = it.label.find('&')
-    let shown = it.label.replace("&", "")
-    let tx = float(dpx(if menu.iconW > 0: 8 else: 14) + menu.iconW)
-    cv.fillText(shown, tx, ty)
-    if amp >= 0 and amp < shown.len:
-      let x0 = tx + cv.measureText(shown[0 ..< amp]).width
-      let w = cv.measureText(shown[amp .. amp]).width
-      cv.fillRect(x0, ty + float(px) * 0.45, w, max(1.0, float(px) / 12))
-    if it.keys.len > 0:
-      cv.textAlign = "right"
-      cv.fillText(it.keys, float(menu.w - dpx(10)), ty)
-    y += menu.itemH
-  putBitmap(menuWin, cv.toBitmap, 0, 0)
+        cv.fillText(it.keys, float(left + arrowW), ty)
+    else:
+      label(float(left + pad), "left")
+      if amp >= 0 and amp < shown.len and it.enabled:
+        let x0 = float(left + pad) + cv.measureText(shown[0 ..< amp]).width
+        let w = cv.measureText(shown[amp .. amp]).width
+        cv.fillRect(x0, ty + float(px) * 0.45, w, max(1.0, float(px) / 12))
+      if it.keys.len > 0 and it.sub == nil:
+        cv.textAlign = "right"
+        cv.fillText(it.keys, float(right - arrowW), ty)
+    if it.sub != nil:
+      # (the arrow of an item that opens a menu beside it, at the far side)
+      let s = max(3.0, float(px) * 0.32)
+      let ax = if rtl: float(left + dpx(8)) else: float(right - dpx(8))
+      cv.fillStyle = ink
+      cv.beginPath()
+      if rtl:
+        cv.moveTo(ax - s / 2, ty); cv.lineTo(ax + s / 2, ty - s); cv.lineTo(ax + s / 2, ty + s)
+      else:
+        cv.moveTo(ax + s / 2, ty); cv.lineTo(ax - s / 2, ty - s); cv.lineTo(ax - s / 2, ty + s)
+      cv.closePath()
+      cv.fill()
+    y += ih
+  putBitmap(l.win, cv.toBitmap, 0, 0)
 
-proc menuItemAt(x, y: int): int =
-  var yy = 2
-  for i, it in menu.items:
-    let h = if it.label.len == 0: menu.itemH div 2 else: menu.itemH
-    if y >= yy and y < yy + h and x >= 0 and x < menu.w: return (if it.label.len == 0: -1 else: i)
+proc drawMenu() =
+  for i in 0 ..< levels.len: drawLevel(i)
+
+proc levelAt(rx, ry: int): int =
+  ## The menu under a point of the screen (the one shown last first), -1 none.
+  for i in countdown(levels.high, 0):
+    let l = levels[i]
+    if rx >= l.x and rx < l.x + l.w and ry >= l.y and ry < l.y + l.h: return i
+  -1
+
+proc itemAt(i: int; rx, ry: int): int =
+  ## The item of menu `i` at a point of the screen (-1: none, or a line).
+  if i < 0 or i >= levels.len: return -1
+  let l = levels[i]
+  var yy = l.y + 3
+  for k, it in l.items:
+    let h = itemHeight(l, it)
+    if ry >= yy and ry < yy + h and rx >= l.x and rx < l.x + l.w:
+      return (if it.label.len == 0: -1 else: k)
     yy += h
   -1
 
-proc menuItem*(label, keys: string; enabled: bool; action: proc (); icon: Bitmap = nil): MenuItem =
-  ## An item for `showMenu` (`icon`: its picture at the left, as the panel's
-  ## Programs menu has them).
-  (label, keys, enabled, action, icon)
+proc itemTop(i, k: int): int =
+  ## Where item `k` of menu `i` starts on the screen.
+  let l = levels[i]
+  result = l.y + 3
+  for j in 0 ..< k: result += itemHeight(l, l.items[j])
+
+proc menuItem*(label, keys: string; enabled: bool; action: proc (); icon: Bitmap = nil;
+               sub: proc (): seq[MenuItem] = nil): MenuItem =
+  ## An item for `showMenu` (`icon`: its picture at the left; `sub`: the
+  ## items of the menu it opens beside it, made when it opens).
+  MenuItem(label: label, keys: keys, enabled: enabled, action: action, icon: icon, sub: sub)
 
 proc menuLine*(): MenuItem =
   ## A line between groups of items.
-  ("", "", false, nil, Bitmap(nil))
+  MenuItem()
 
-proc showMenu*(items: seq[MenuItem]; x, y: int; above = false) =
-  ## A menu at `x`, `y` on the screen (the screen's pixels; `above`: its
-  ## bottom at `y`), over every window: the pointer and the keyboard its own
-  ## until an item is chosen (a click, a letter, Enter) or it is left (a
-  ## click outside, Esc).
-  closeMenu()
+proc openLevel(items: seq[MenuItem]; x, y: int; above, toLeft, big: bool;
+               beside: tuple[x, w: int] = (-1, 0)) =
+  ## A menu shown: at `x`, `y` (`above`: its bottom at `y`; `toLeft`: its
+  ## right edge at `x`); `beside`: the menu it opens from, which it goes
+  ## beside, on the other side when there is no room.
   if items.len == 0: return
-  menu.items = items
+  var l = MenuLevel(items: items, hot: -1, opened: -1)
   # (in the interface's language: a label translated loses its "&")
-  for it in menu.items.mitems:
+  for it in l.items.mitems:
     if it.label.len > 0:
       let bare = it.label.replace("&&", "\1").replace("&", "").replace("\1", "&")
       let t = tr(bare)
       if t != bare: it.label = t
-  menu.itemH = max(16, dpx(if bigFrames: 32 else: 22))
-  # (a column for the pictures, when an item has one)
-  menu.iconW = 0
-  for it in menu.items:
-    if it.icon != nil: menu.iconW = menu.itemH
+  let normalH = max(16, dpx(if bigFrames: 32 else: 22))
+  if big:
+    l.iconSize = menuBigIconSize()
+    l.itemH = l.iconSize + dpx(if bigFrames: 10 else: 8)
+    l.band = dpx(if bigFrames: 28 else: 21)
+  else:
+    l.iconSize = menuIconSize()
+    l.itemH = normalH
+  l.iconW = 0
+  for it in l.items:
+    if it.icon != nil: l.iconW = l.iconSize
   # (as wide as its widest label and keys)
   let probe = newCanvas2D(4, 4)
-  let px = max(9, int(round(float(menu.itemH) * 0.5)))
+  let px = max(9, int(round(float(normalH) * 0.5)))
   probe.font = $px & "px sans-serif"
   var lw, kw = 0.0
-  for it in menu.items:
+  var anySub = false
+  for it in l.items:
     lw = max(lw, probe.measureText(it.label.replace("&", "")).width)
     kw = max(kw, probe.measureText(it.keys).width)
-  menu.w = max(dpx(140), int(lw + kw) + dpx(14 + 24 + 10) + menu.iconW)
-  menu.h = 4
-  for it in menu.items: menu.h += (if it.label.len == 0: menu.itemH div 2 else: menu.itemH)
+    if it.sub != nil: anySub = true
+  l.w = max(dpx(if big: 180 else: 140),
+            int(lw + kw) + dpx(14 + 24 + 10) + l.iconW + l.band + (if anySub: dpx(16) else: 0))
+  l.h = 6
+  for it in l.items: l.h += itemHeight(l, it)
   let (sw, sh) = screenSize()
-  menu.x = clamp(x, 0, max(0, sw - menu.w))
-  menu.y = clamp((if above: y - menu.h else: y), 0, max(0, sh - menu.h))
-  menu.hot = -1
-  # (the button that opened it, let go where it was pressed, leaves it open;
-  # moved onto an item first, the item is chosen -- 3.1's press, drag, let go)
-  menu.fromX = x
-  menu.fromY = y
-  menu.armed = false
-  menuWin = XCreateSimpleWindow(dpy, root, cint(menu.x), cint(menu.y), cuint(menu.w), cuint(menu.h),
-                                0, 0, xcolor(ui.theme.window))
+  if beside.x >= 0:
+    # (beside the menu it comes from: after it, else before it)
+    let after = if ui.rtl: beside.x - l.w + dpx(3) else: beside.x + beside.w - dpx(3)
+    let before = if ui.rtl: beside.x + beside.w - dpx(3) else: beside.x - l.w + dpx(3)
+    l.x = if after >= 0 and after + l.w <= sw: after else: before
+  else:
+    l.x = if toLeft: x - l.w else: x
+  l.x = clamp(l.x, 0, max(0, sw - l.w))
+  l.y = clamp((if above: y - l.h else: y), 0, max(0, sh - l.h))
+  l.win = XCreateSimpleWindow(dpy, root, cint(l.x), cint(l.y), cuint(l.w), cuint(l.h), 0, 0,
+                              xcolor(ui.theme.window))
   # (override-redirect: a menu is not a window to manage)
   var attrs: XSetWindowAttributes
   attrs.overrideRedirect = 1
-  discard XChangeWindowAttributes(dpy, menuWin, CWOverrideRedirect, addr attrs)
-  discard XSelectInput(dpy, menuWin, ExposureMask or ButtonPressMask or ButtonReleaseMask or
+  discard XChangeWindowAttributes(dpy, l.win, CWOverrideRedirect, addr attrs)
+  discard XSelectInput(dpy, l.win, ExposureMask or ButtonPressMask or ButtonReleaseMask or
                        PointerMotionMask or KeyPressMask)
-  discard XMapWindow(dpy, menuWin)
-  discard XRaiseWindow(dpy, menuWin)
-  discard XGrabPointer(dpy, menuWin, 1, cuint(ButtonPressMask or ButtonReleaseMask or PointerMotionMask),
+  discard XMapWindow(dpy, l.win)
+  discard XRaiseWindow(dpy, l.win)
+  levels.add l
+  drawLevel(levels.high)
+
+proc showMenu*(items: seq[MenuItem]; x, y: int; above = false; big = false; toLeft = false) =
+  ## A menu at `x`, `y` on the screen (the screen's pixels; `above`: its
+  ## bottom at `y`; `toLeft`: its right edge at `x`), over every window:
+  ## the pointer and the keyboard its own until an item is chosen (a click,
+  ## a letter, Enter) or it is left (a click outside, Esc). `big`: the
+  ## Start menu's large pictures and band.
+  let keepClient = menuClient
+  let keepClosed = menuClosed
+  menuClosed = nil
+  closeMenu()
+  menuClosed = keepClosed
+  menuClient = keepClient
+  if items.len == 0: return
+  menuBig = big
+  # (the button that opened it, let go where it was pressed, leaves it open;
+  # moved onto an item first, the item is chosen -- 3.1's press, drag, let go)
+  menuFrom = (x, y)
+  menuArmed = false
+  openLevel(items, x, y, above, toLeft, big)
+  if levels.len == 0: return
+  discard XGrabPointer(dpy, levels[0].win, 1, cuint(ButtonPressMask or ButtonReleaseMask or PointerMotionMask),
                        GrabModeAsync, GrabModeAsync, None, 0, CurrentTime)
-  discard XGrabKeyboard(dpy, menuWin, 0, GrabModeAsync, GrabModeAsync, CurrentTime)
-  drawMenu()
+  discard XGrabKeyboard(dpy, levels[0].win, 0, GrabModeAsync, GrabModeAsync, CurrentTime)
+
+proc openSub(i: int; focusFirst = false) =
+  ## The menu of the hot item of menu `i` opened beside it (the ones after
+  ## it closed first).
+  if i < 0 or i >= levels.len: return
+  let k = levels[i].hot
+  if levels.len > i + 1:
+    if levels[i].opened == k and k >= 0: return
+    closeLevels(i + 1)
+  if k < 0 or k >= levels[i].items.len: return
+  let it = levels[i].items[k]
+  if it.sub == nil or not it.enabled: return
+  let items = it.sub()
+  if items.len == 0: return
+  levels[i].opened = k
+  drawLevel(i)
+  openLevel(items, 0, itemTop(i, k) - 3, false, false, false, (levels[i].x, levels[i].w))
+  if focusFirst and levels.len > i + 1:
+    for j, x in levels[^1].items:
+      if x.label.len > 0 and x.enabled:
+        levels[^1].hot = j
+        break
+    drawLevel(levels.high)
+
+proc choose(i, k: int) =
+  ## Item `k` of menu `i` chosen: its menu opened, or what it does done.
+  if i < 0 or i >= levels.len or k < 0 or k >= levels[i].items.len: return
+  let it = levels[i].items[k]
+  if not it.enabled: return
+  if it.sub != nil:
+    levels[i].hot = k
+    openSub(i, focusFirst = false)
+    return
+  let act = it.action
+  closeMenu()
+  if act != nil: act()
+
+proc menuTick*(): int =
+  ## The pointer resting on an item: its menu opens (or the one beside
+  ## closes) when the moment came. The milliseconds until the next look
+  ## (0: nothing waiting).
+  if menuDueLevel < 0 or levels.len == 0: return 0
+  let now = epochTime()
+  if now < menuDue: return max(1, int((menuDue - now) * 1000))
+  let i = menuDueLevel
+  menuDueLevel = -1
+  if i < levels.len:
+    if levels.len > i + 1 and levels[i].opened != levels[i].hot: closeLevels(i + 1)
+    openSub(i)
+    drawLevel(i)
+  0
+
+proc menuMotion(rx, ry: int) =
+  if not menuArmed and (abs(rx - menuFrom.x) > dpx(6) or abs(ry - menuFrom.y) > dpx(6)):
+    menuArmed = true
+  let i = levelAt(rx, ry)
+  if i < 0: return
+  let k = itemAt(i, rx, ry)
+  if k == levels[i].hot: return
+  levels[i].hot = k
+  drawLevel(i)
+  if i > 0 and levels[i - 1].opened >= 0 and levels[i - 1].hot != levels[i - 1].opened:
+    # (back in the menu that was open: its item lit again, nothing to close)
+    levels[i - 1].hot = levels[i - 1].opened
+    drawLevel(i - 1)
+  # (a moment later: the menu of the item rested on, or none)
+  let opens = k >= 0 and levels[i].items[k].sub != nil
+  if opens or levels.len > i + 1:
+    menuDue = epochTime() + 0.35
+    menuDueLevel = i
+    wakeIn(360)
+  else:
+    menuDueLevel = -1
+
+proc menuPress(rx, ry: int): bool =
+  ## A press while the menus are shown: true when it was theirs.
+  menuArmed = true
+  let i = levelAt(rx, ry)
+  if i >= 0:
+    let k = itemAt(i, rx, ry)
+    if k >= 0 and levels[i].items[k].sub != nil:
+      levels[i].hot = k
+      openSub(i)
+    return true
+  if menuButton.w > 0 and rx >= menuButton.x and rx < menuButton.x + menuButton.w and
+     ry >= menuButton.y and ry < menuButton.y + menuButton.h:
+    menuClosedAt = epochTime()
+  closeMenu()
+  true
+
+proc menuRelease(rx, ry: int) =
+  let i = levelAt(rx, ry)
+  if i < 0: return
+  let k = itemAt(i, rx, ry)
+  if menuArmed and k >= 0: choose(i, k)
 
 proc menuKey(e: XKeyEvent) =
-  ## Up and Down through the items, Enter chooses, Esc closes.
+  ## Up and Down through the items of the menu shown last, Right into the
+  ## menu of an item, Left out of it, Enter chooses, Esc closes one.
+  if levels.len == 0: return
   let code = e.keycode
   template isKey(sym: culong): bool = code == cuint(XKeysymToKeycode(dpy, sym))
+  let i = levels.high
   var step = 0
   if isKey(XK_Escape):
-    closeMenu()
+    if levels.len > 1:
+      closeLevels(i)
+      drawLevel(levels.high)
+    else: closeMenu()
     return
   elif isKey(XK_Down): step = 1
   elif isKey(XK_Up): step = -1
-  elif isKey(XK_Return):
-    let i = menu.hot
-    if i >= 0 and i < menu.items.len and menu.items[i].enabled:
-      let act = menu.items[i].action
-      closeMenu()
-      if act != nil: act()
+  elif isKey(if ui.rtl: XK_Left else: XK_Right):
+    let k = levels[i].hot
+    if k >= 0 and levels[i].items[k].sub != nil: openSub(i, focusFirst = true)
+    return
+  elif isKey(if ui.rtl: XK_Right else: XK_Left):
+    if levels.len > 1:
+      closeLevels(i)
+      drawLevel(levels.high)
+    return
+  elif isKey(XK_Return) or isKey(culong(0xff8d)):
+    let k = levels[i].hot
+    if k >= 0:
+      if levels[i].items[k].sub != nil: openSub(i, focusFirst = true)
+      else: choose(i, k)
     return
   if step == 0:
-    # (the underlined letter of an item chooses it)
+    # (the underlined letter of an item chooses it; without one, its first)
     var ek = e
     let sym = XLookupKeysym(addr ek, 0)
     if sym >= culong('a') and sym <= culong('z'):
-      for i, it in menu.items:
+      let ch = char(sym)
+      var found = -1
+      for k, it in levels[i].items:
         let amp = it.label.find('&')
-        if it.enabled and amp >= 0 and amp + 1 < it.label.len and
-           it.label[amp + 1].toLowerAscii == char(sym):
-          let act = it.action
-          closeMenu()
-          if act != nil: act()
-          return
+        if it.enabled and amp >= 0 and amp + 1 < it.label.len and it.label[amp + 1].toLowerAscii == ch:
+          found = k
+          break
+      if found < 0:
+        for k, it in levels[i].items:
+          if it.enabled and it.label.len > 0 and it.label.replace("&", "")[0].toLowerAscii == ch:
+            found = k
+            break
+      if found >= 0:
+        levels[i].hot = found
+        drawLevel(i)
+        if levels[i].items[found].sub != nil: openSub(i, focusFirst = true)
+        else: choose(i, found)
     return
-  if step != 0 and menu.items.len > 0:
-    var i = menu.hot
-    for _ in 0 ..< menu.items.len:
-      i = (i + step + menu.items.len) mod menu.items.len
-      if menu.items[i].label.len > 0 and menu.items[i].enabled: break
-    menu.hot = i
-    drawMenu()
+  let n = levels[i].items.len
+  var k = levels[i].hot
+  if k < 0: k = (if step > 0: -1 else: 0)   # (none yet: Down the first, Up the last)
+  for _ in 0 ..< n:
+    k = (k + step + n) mod n
+    if levels[i].items[k].label.len > 0 and levels[i].items[k].enabled: break
+  levels[i].hot = k
+  drawLevel(i)
 
 proc openMenu*(c: Client; x, y: int) =
   ## The control menu of `c` (Restore, Minimize, Maximize, Close, Switch
   ## To...) at `x`, `y` on the screen.
   if c == nil: return
-  let isDialog = c.transient != None or c.fixed
-  menu.c = c
+  let isDialog = c.transient != None or c.splash
   # (the window may be gone by the time an item is chosen)
   template its(body: untyped): proc () =
     proc () =
-      if menu.c != nil and menu.c in clients: body
+      if menuClient != nil and menuClient in clients: body
   showMenu(@[
-    menuItem("&Restore", "", c.maximized or c.iconic, its(restore(menu.c))),
-    menuItem("Mi&nimize", "", not isDialog and not c.iconic, its(minimize(menu.c))),
-    menuItem("Ma&ximize", "", not isDialog and not c.maximized, its(maximize(menu.c))),
+    menuItem("&Restore", "", c.maximized or c.iconic or c.zoned, its(restore(menuClient))),
+    menuItem("Mi&nimize", "", not isDialog and not c.iconic, its(minimize(menuClient))),
+    menuItem("Ma&ximize", "", not isDialog and not c.maximized, its(maximize(menuClient))),
     menuLine(),
-    menuItem("&Close", "Alt+F4", true, its(close(menu.c))),
+    menuItem("&Close", "Alt+F4", true, its(close(menuClient))),
     menuLine(),
-    menuItem("S&witch To...", "Ctrl+Esc", true, proc () = (if taskList != nil: taskList()))], x, y)
+    menuItem("S&witch To...", "Ctrl+Shift+Esc", true, proc () = (if taskList != nil: taskList()))], x, y)
+  menuClient = c
+
+# ---- snapping to parts of the screen, as Windows 11 ----------------------------------------------
+#
+# A window dragged by its title to an edge of the work area goes on that
+# half, to a corner on that quarter, to the top maximized: a frame shows
+# where while it is held there. Dragged away again, a snapped or maximized
+# window takes back its size from before, under the pointer as it was held.
+# The pointer resting on the maximize button (or Win+Z) shows the layouts:
+# halves, two thirds and one, thirds, a half and two quarters, quarters;
+# a part clicked puts the window there. Then the other windows are offered
+# for the parts left (Snap Assist). Win+Left, Right, Up, Down go from part
+# to part. A screen taller than wide has the layouts the other way round.
+
+const
+  zLeft*: Zone = (0.0, 0.0, 0.5, 1.0)
+  zRight*: Zone = (0.5, 0.0, 1.0, 1.0)
+  zTopLeft*: Zone = (0.0, 0.0, 0.5, 0.5)
+  zTopRight*: Zone = (0.5, 0.0, 1.0, 0.5)
+  zBottomLeft*: Zone = (0.0, 0.5, 0.5, 1.0)
+  zBottomRight*: Zone = (0.5, 0.5, 1.0, 1.0)
+  zWhole: Zone = (0.0, 0.0, 1.0, 1.0)
+
+proc layouts(): seq[seq[Zone]] =
+  ## The layouts the maximize button offers (a screen taller than wide:
+  ## turned, the parts one above another).
+  result = @[@[zLeft, zRight],
+             @[(0.0, 0.0, 2/3, 1.0), (2/3, 0.0, 1.0, 1.0)],
+             @[(0.0, 0.0, 1/3, 1.0), (1/3, 0.0, 2/3, 1.0), (2/3, 0.0, 1.0, 1.0)],
+             @[zLeft, zTopRight, zBottomRight],
+             @[zTopLeft, zTopRight, zBottomLeft, zBottomRight]]
+  let r = workRect()
+  if r.h > r.w:
+    for l in result.mitems:
+      for z in l.mitems: z = (z.y0, z.x0, z.y1, z.x1)
+
+proc toZone*(c: Client; z: Zone) =
+  ## `c` snapped to zone `z` of the work area (its size before kept, for
+  ## when it leaves it).
+  if c == nil or c.splash or c.transient != None or c.fullscreen: return
+  if c.iconic: restore(c)
+  if not c.zoned and not c.maximized: c.saved = (c.x, c.y, c.w, c.h)
+  if c.maximized:
+    c.maximized = false
+    setNetState(c)
+  c.zoned = true
+  c.zone = z
+  zoneGeometry(c, z)
+  applyGeometry(c)
+  focus(c)
+  drawFrame(c)
+  changedNow()
+
+proc workChanged*() =
+  ## The work area changed (the panel moved, grew, hid): maximized and
+  ## snapped windows fill their part of it again, the others stay in it.
+  for c in snapshot():
+    if c.fullscreen: applyGeometry(c)
+    elif c.maximized: (maximizeGeometry(c); applyGeometry(c))
+    elif c.zoned: (zoneGeometry(c, c.zone); applyGeometry(c))
+    else:
+      fitOnScreen(c)
+      applyGeometry(c)
+    drawFrame(c)
+  let r = workRect()
+  setLongs(dpy, root, atom(dpy, "_NET_WORKAREA"), XA_CARDINAL,
+           [clong(r.x), clong(r.y), clong(r.w), clong(r.h)])
+
+# -- where a dragged window would go, shown --
+
+var previewWins: array[4, Window]
+
+proc showPreview(r: tuple[x, y, w, h: int]) =
+  ## A frame in the selection's color round where a window would snap.
+  let t = max(2, dpx(4))
+  let parts = [(r.x, r.y, r.w, t), (r.x, r.y + r.h - t, r.w, t),
+               (r.x, r.y, t, r.h), (r.x + r.w - t, r.y, t, r.h)]
+  for i, (x, y, w, h) in parts:
+    if previewWins[i] == None:
+      previewWins[i] = XCreateSimpleWindow(dpy, root, cint(x), cint(y), cuint(max(1, w)), cuint(max(1, h)),
+                                           0, 0, xcolor(ui.theme.select))
+      var attrs: XSetWindowAttributes
+      attrs.overrideRedirect = 1
+      discard XChangeWindowAttributes(dpy, previewWins[i], CWOverrideRedirect, addr attrs)
+      discard XMapWindow(dpy, previewWins[i])
+    else:
+      discard XMoveResizeWindow(dpy, previewWins[i], cint(x), cint(y), cuint(max(1, w)), cuint(max(1, h)))
+    discard XRaiseWindow(dpy, previewWins[i])
+
+proc hidePreview() =
+  for w in previewWins.mitems:
+    if w != None:
+      discard XDestroyWindow(dpy, w)
+      w = None
+
+type SnapAim = tuple[on, whole: bool; z: Zone]
+
+var aim: SnapAim                 # where the window dragged now would snap
+
+proc aimAt(rx, ry: int): SnapAim =
+  ## Where a window held at this point of the screen would snap.
+  let r = workRect()
+  let edge = dpx(if bigFrames: 14 else: 6)
+  let corner = dpx(if bigFrames: 80 else: 56)
+  let atL = rx <= r.x + edge
+  let atR = rx >= r.x + r.w - 1 - edge
+  let atT = ry <= r.y + edge
+  let atB = ry >= r.y + r.h - 1 - edge
+  if atL or atR:
+    let z = if ry <= r.y + corner: (if atL: zTopLeft else: zTopRight)
+            elif ry >= r.y + r.h - corner: (if atL: zBottomLeft else: zBottomRight)
+            else: (if atL: zLeft else: zRight)
+    return (true, false, z)
+  if atT:
+    if rx <= r.x + corner: return (true, false, zTopLeft)
+    if rx >= r.x + r.w - corner: return (true, false, zTopRight)
+    return (true, true, zWhole)
+  if atB:
+    if rx <= r.x + corner: return (true, false, zBottomLeft)
+    if rx >= r.x + r.w - corner: return (true, false, zBottomRight)
+  (false, false, zWhole)
+
+# -- Snap Assist: the other windows offered for the parts left --
+
+var
+  assistWin: Window
+  assistZone: Zone
+  assistNext: seq[Zone]          ## the parts after this one
+  assistList: seq[Client]
+  assistTiles: seq[tuple[x, y, w, h: int]]    ## where each is in the box
+  assistHot = -1
+  assistRect: tuple[x, y, w, h: int]
+
+proc closeAssist*() =
+  if assistWin != None:
+    discard XUngrabPointer(dpy, CurrentTime)
+    discard XUngrabKeyboard(dpy, CurrentTime)
+    discard XDestroyWindow(dpy, assistWin)
+    assistWin = None
+  assistList = @[]
+  assistNext = @[]
+
+proc drawAssist() =
+  if assistWin == None: return
+  let (w, h) = (assistRect.w, assistRect.h)
+  let t = ui.theme
+  let cv = newCanvas2D(w, h)
+  cv.fillStyle = t.frame
+  cv.fillRect(0, 0, float(w), float(h))
+  cv.fillStyle = t.face
+  cv.fillRect(1, 1, float(w - 2), float(h - 2))
+  let px = max(9, dpx(12))
+  cv.textBaseline = "middle"
+  cv.font = "bold " & $px & "px sans-serif"
+  cv.fillStyle = t.text
+  cv.textAlign = "center"
+  cv.fillText(tr("Choose the window for this part"), float(w) / 2, float(dpx(20)))
+  cv.font = $px & "px sans-serif"
+  let isz = dpx(32)
+  for i, c in assistList:
+    if i >= assistTiles.len: break
+    let r = assistTiles[i]
+    let hot = i == assistHot
+    cv.fillStyle = t.frame
+    cv.fillRect(float(r.x), float(r.y), float(r.w), float(r.h))
+    cv.fillStyle = (if hot: t.select else: t.window)
+    cv.fillRect(float(r.x + 1), float(r.y + 1), float(r.w - 2), float(r.h - 2))
+    let ic = c.readIcon(isz)
+    if ic != nil:
+      cv.drawImage(ic, float(r.x + dpx(8)), float(r.y + (r.h - isz) div 2), float(isz), float(isz))
+    var title = tr(c.title)
+    let room = float(r.w - isz - dpx(24))
+    while title.len > 3 and cv.measureText(title).width > room:
+      title = title[0 ..< title.len - 4] & "..."
+      while title.len > 3 and (ord(title[^4]) and 0xC0) == 0x80: title = title[0 ..< title.len - 4] & "..."
+    cv.fillStyle = (if hot: t.selectText else: t.text)
+    cv.textAlign = "left"
+    cv.fillText(title, float(r.x + isz + dpx(16)), float(r.y + r.h div 2))
+  putBitmap(assistWin, cv.toBitmap, 0, 0)
+
+proc openAssist(zones: seq[Zone]; taken: seq[Client]) =
+  ## The windows not snapped yet, offered for `zones[0]` (then the next).
+  closeAssist()
+  if zones.len == 0: return
+  var list: seq[Client]
+  for i in countdown(clients.high, 0):
+    let c = clients[i]
+    if c in taken or c.transient != None or c.splash or c.dialog or c.fullscreen: continue
+    list.add c
+  if list.len == 0: return
+  assistZone = zones[0]
+  assistNext = zones[1 .. ^1]
+  assistList = list
+  assistRect = zoneRect(zones[0])
+  let (w, h) = (assistRect.w, assistRect.h)
+  # (the windows as tiles, as many as there is room for)
+  let tw = min(w - dpx(24), dpx(260))
+  let th = dpx(48)
+  let cols = max(1, (w - dpx(16)) div (tw + dpx(8)))
+  let rows = max(1, (h - dpx(48)) div (th + dpx(8)))
+  if assistList.len > cols * rows: assistList.setLen(cols * rows)
+  let usedW = cols * (tw + dpx(8)) - dpx(8)
+  assistTiles = @[]
+  for i in 0 ..< assistList.len:
+    assistTiles.add ((w - usedW) div 2 + (i mod cols) * (tw + dpx(8)), dpx(40) + (i div cols) * (th + dpx(8)), tw, th)
+  assistHot = 0
+  assistWin = XCreateSimpleWindow(dpy, root, cint(assistRect.x), cint(assistRect.y), cuint(max(1, w)),
+                                  cuint(max(1, h)), 0, 0, xcolor(ui.theme.face))
+  var attrs: XSetWindowAttributes
+  attrs.overrideRedirect = 1
+  discard XChangeWindowAttributes(dpy, assistWin, CWOverrideRedirect, addr attrs)
+  discard XSelectInput(dpy, assistWin, ExposureMask or ButtonPressMask or ButtonReleaseMask or
+                       PointerMotionMask or KeyPressMask)
+  discard XMapWindow(dpy, assistWin)
+  discard XRaiseWindow(dpy, assistWin)
+  discard XGrabPointer(dpy, assistWin, 1, cuint(ButtonPressMask or ButtonReleaseMask or PointerMotionMask),
+                       GrabModeAsync, GrabModeAsync, None, 0, CurrentTime)
+  discard XGrabKeyboard(dpy, assistWin, 0, GrabModeAsync, GrabModeAsync, CurrentTime)
+  drawAssist()
+
+proc assistAt(rx, ry: int): int =
+  for i, r in assistTiles:
+    let x = rx - assistRect.x
+    let y = ry - assistRect.y
+    if x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h: return i
+  -1
+
+proc assistChoose(i: int) =
+  if i < 0 or i >= assistList.len: return
+  let c = assistList[i]
+  let z = assistZone
+  let rest = assistNext
+  var taken: seq[Client]
+  for o in clients:
+    if o.zoned: taken.add o
+  closeAssist()
+  if c in clients:
+    toZone(c, z)
+    taken.add c
+    openAssist(rest, taken)
+
+# -- the layouts, on the maximize button --
+
+var
+  flyWin: Window
+  flyClient: Client
+  flyKeys = false                ## opened by Win+Z: the keys and the pointer its own
+  flyZones: seq[tuple[layout, part: int; x, y, w, h: int]]
+  flyHot = -1
+  flyRect: tuple[x, y, w, h: int]
+  flyFrom: tuple[x, y, w, h: int]   ## the maximize button it came from
+  flyLeft = 0.0                  ## when the pointer left it and its button
+  hoverMax: tuple[c: Client; since: float]
+
+proc closeFly*() =
+  if flyWin != None:
+    if flyKeys:
+      discard XUngrabPointer(dpy, CurrentTime)
+      discard XUngrabKeyboard(dpy, CurrentTime)
+    discard XDestroyWindow(dpy, flyWin)
+    flyWin = None
+  flyClient = nil
+  flyLeft = 0
+
+proc drawFly() =
+  if flyWin == None: return
+  let (w, h) = (flyRect.w, flyRect.h)
+  let t = ui.theme
+  let cv = newCanvas2D(w, h)
+  cv.fillStyle = t.frame
+  cv.fillRect(0, 0, float(w), float(h))
+  cv.fillStyle = t.face
+  cv.fillRect(1, 1, float(w - 2), float(h - 2))
+  cv.fillStyle = t.light
+  cv.fillRect(1, 1, float(w - 2), 1)
+  cv.fillRect(1, 1, 1, float(h - 2))
+  cv.fillStyle = t.shadow
+  cv.fillRect(1, float(h - 2), float(w - 2), 1)
+  cv.fillRect(float(w - 2), 1, 1, float(h - 2))
+  for i, z in flyZones:
+    cv.fillStyle = t.frame
+    cv.fillRect(float(z.x), float(z.y), float(z.w), float(z.h))
+    cv.fillStyle = (if i == flyHot: t.select else: t.window)
+    cv.fillRect(float(z.x + 1), float(z.y + 1), float(z.w - 2), float(z.h - 2))
+  putBitmap(flyWin, cv.toBitmap, 0, 0)
+
+proc openFly*(c: Client; x, y: int; keys = false) =
+  ## The layouts for `c`, their box's top middle at `x`, `y` on the screen.
+  closeFly()
+  if c == nil or c.splash or c.transient != None or c.fullscreen: return
+  let ls = layouts()
+  let r = workRect()
+  let ratio = float(r.h) / float(max(1, r.w))
+  let cw = dpx(if bigFrames: 104 else: 84)
+  let ch = max(dpx(30), int(float(cw) * ratio))
+  let gap = dpx(10)
+  let per = 3
+  let rowsN = (ls.len + per - 1) div per
+  flyRect.w = per * cw + (per + 1) * gap
+  flyRect.h = rowsN * ch + (rowsN + 1) * gap
+  let (sw, sh) = screenSize()
+  flyRect.x = clamp(x - flyRect.w div 2, 0, max(0, sw - flyRect.w))
+  flyRect.y = clamp(y, 0, max(0, sh - flyRect.h))
+  flyZones = @[]
+  for li, l in ls:
+    let cx = gap + (li mod per) * (cw + gap)
+    let cy = gap + (li div per) * (ch + gap)
+    let g = max(2, dpx(2))
+    for pi, z in l:
+      let x0 = cx + int(z.x0 * float(cw))
+      let x1 = cx + int(z.x1 * float(cw))
+      let y0 = cy + int(z.y0 * float(ch))
+      let y1 = cy + int(z.y1 * float(ch))
+      flyZones.add (li, pi, x0 + (if z.x0 > 0: g div 2 else: 0), y0 + (if z.y0 > 0: g div 2 else: 0),
+                    x1 - x0 - (if z.x0 > 0: g div 2 else: 0) - (if z.x1 < 1: g div 2 else: 0),
+                    y1 - y0 - (if z.y0 > 0: g div 2 else: 0) - (if z.y1 < 1: g div 2 else: 0))
+  flyClient = c
+  flyKeys = keys
+  flyHot = if keys: 0 else: -1
+  flyWin = XCreateSimpleWindow(dpy, root, cint(flyRect.x), cint(flyRect.y), cuint(flyRect.w),
+                               cuint(flyRect.h), 0, 0, xcolor(ui.theme.face))
+  var attrs: XSetWindowAttributes
+  attrs.overrideRedirect = 1
+  discard XChangeWindowAttributes(dpy, flyWin, CWOverrideRedirect, addr attrs)
+  discard XSelectInput(dpy, flyWin, ExposureMask or ButtonPressMask or ButtonReleaseMask or
+                       PointerMotionMask or KeyPressMask or LeaveWindowMask)
+  discard XMapWindow(dpy, flyWin)
+  discard XRaiseWindow(dpy, flyWin)
+  if keys:
+    discard XGrabPointer(dpy, flyWin, 1, cuint(ButtonPressMask or ButtonReleaseMask or PointerMotionMask),
+                         GrabModeAsync, GrabModeAsync, None, 0, CurrentTime)
+    discard XGrabKeyboard(dpy, flyWin, 0, GrabModeAsync, GrabModeAsync, CurrentTime)
+  drawFly()
+
+proc flyAt(rx, ry: int): int =
+  let x = rx - flyRect.x
+  let y = ry - flyRect.y
+  for i, z in flyZones:
+    if x >= z.x and x < z.x + z.w and y >= z.y and y < z.y + z.h: return i
+  -1
+
+proc flyChoose(i: int) =
+  ## A part of a layout chosen: the window there, the others offered for the rest.
+  if i < 0 or i >= flyZones.len: return
+  let c = flyClient
+  let l = layouts()[flyZones[i].layout]
+  let part = flyZones[i].part
+  closeFly()
+  if c == nil or c notin clients: return
+  toZone(c, l[part])
+  var rest: seq[Zone]
+  for k, z in l:
+    if k != part: rest.add z
+  openAssist(rest, @[c])
+
+proc maxButtonRect(c: Client): tuple[x, y, w, h: int] =
+  let th = tbh()
+  (c.x + c.frameW - bw() - th, c.y + bw(), th, th)
+
+proc snapTick*(): int =
+  ## The pointer resting on a maximize button: its layouts shown; a box
+  ## shown by it and left: closed. The milliseconds until the next look.
+  let now = epochTime()
+  if flyWin != None and not flyKeys:
+    var r, child: Window
+    var rx, ry, wx, wy: cint
+    var mask: cuint
+    discard XQueryPointer(dpy, root, addr r, addr child, addr rx, addr ry, addr wx, addr wy, addr mask)
+    let inFly = rx >= flyRect.x and rx < flyRect.x + flyRect.w and ry >= flyRect.y - dpx(4) and
+                ry < flyRect.y + flyRect.h
+    let b = flyFrom
+    let inBtn = rx >= b.x and rx < b.x + b.w and ry >= b.y and ry < b.y + b.h
+    if inFly or inBtn:
+      flyLeft = 0
+    elif flyLeft == 0: flyLeft = now
+    elif now - flyLeft > 0.4:
+      closeFly()
+      return 0
+    return 150
+  if hoverMax.c != nil and flyWin == None:
+    let c = hoverMax.c
+    if c notin clients or drag.kind != dkNone or menuOpen():
+      hoverMax.c = nil
+      return 0
+    if now - hoverMax.since >= 0.6:
+      hoverMax.c = nil
+      let b = maxButtonRect(c)
+      flyFrom = b
+      openFly(c, b.x + b.w div 2, b.y + b.h)
+      return 150
+    return max(1, int((hoverMax.since + 0.6 - now) * 1000))
+  0
+
+proc flyKey(e: XKeyEvent) =
+  ## Win+Z's box: the arrows go from part to part, Enter puts the window
+  ## there, Esc closes it.
+  var ek = e
+  let sym = XLookupKeysym(addr ek, 0)
+  if sym == XK_Escape:
+    closeFly()
+  elif sym == XK_Return:
+    flyChoose(flyHot)
+  elif sym in [XK_Right, XK_Down, XK_Tab]:
+    flyHot = (flyHot + 1) mod max(1, flyZones.len)
+    drawFly()
+  elif sym in [XK_Left, XK_Up]:
+    flyHot = (flyHot - 1 + flyZones.len) mod max(1, flyZones.len)
+    drawFly()
+
+proc assistKey(e: XKeyEvent) =
+  var ek = e
+  let sym = XLookupKeysym(addr ek, 0)
+  if sym == XK_Escape: closeAssist()
+  elif sym == XK_Return: assistChoose(assistHot)
+  elif sym in [XK_Right, XK_Down, XK_Tab]:
+    assistHot = (assistHot + 1) mod max(1, assistList.len)
+    drawAssist()
+  elif sym in [XK_Left, XK_Up]:
+    assistHot = (assistHot - 1 + assistList.len) mod max(1, assistList.len)
+    drawAssist()
+
+proc winArrow*(c: Client; dir: char) =
+  ## Win+Left, Right, Up, Down: from part to part of the screen (Up from a
+  ## half to its top quarter, Down to its bottom one; Left from the right
+  ## half back to the window's own size; Up maximizes, Down restores, then
+  ## minimizes).
+  if c == nil or c.splash or c.transient != None or c.fullscreen: return
+  let z = c.zone
+  let zoned = c.zoned
+  case dir
+  of 'L':
+    if zoned and z == zRight: restore(c)
+    elif zoned and z == zTopRight: toZone(c, zTopLeft)
+    elif zoned and z == zBottomRight: toZone(c, zBottomLeft)
+    else: toZone(c, zLeft)
+  of 'R':
+    if zoned and z == zLeft: restore(c)
+    elif zoned and z == zTopLeft: toZone(c, zTopRight)
+    elif zoned and z == zBottomLeft: toZone(c, zBottomRight)
+    else: toZone(c, zRight)
+  of 'U':
+    if zoned and z == zLeft: toZone(c, zTopLeft)
+    elif zoned and z == zRight: toZone(c, zTopRight)
+    elif zoned and z == zBottomLeft: toZone(c, zLeft)
+    elif zoned and z == zBottomRight: toZone(c, zRight)
+    elif not c.maximized: maximize(c)
+  of 'D':
+    if c.maximized: restore(c)
+    elif zoned and z == zLeft: toZone(c, zBottomLeft)
+    elif zoned and z == zRight: toZone(c, zBottomRight)
+    elif zoned and z == zTopLeft: toZone(c, zLeft)
+    elif zoned and z == zTopRight: toZone(c, zRight)
+    elif zoned: restore(c)
+    else: minimize(c)
+  else: discard
+
+proc tick*(): int =
+  ## The manager's moments: a menu to open, the layouts to show or close.
+  ## The milliseconds until it wants to look again (0: nothing waiting).
+  let a = menuTick()
+  let b = snapTick()
+  if a > 0 and b > 0: min(a, b) else: max(a, b)
 
 # ---- managing a window ------------------------------------------------------------------------------
 
 proc manage(w: Window; adopt: bool) =
-  if w == desk or w == checkWin or w == menuWin or w in onTop or findClient(w) != nil: return
+  if w == desk or w == checkWin or isMenuWin(w) or w in onTop or findClient(w) != nil: return
   var a: XWindowAttributes
   if XGetWindowAttributes(dpy, w, addr a) == 0: return
   if a.overrideRedirect != 0: return
@@ -1097,7 +1882,9 @@ proc manage(w: Window; adopt: bool) =
   readClass(c)
   readProtocols(c)
   readHints(c)
-  if clong(aTypeSplash) in types: c.fixed = true
+  if clong(aTypeSplash) in types:
+    c.fixed = true
+    c.splash = true
   c.dialog = clong(aTypeDialog) in types
   c.w = max(c.w, 1)
   place(c, int(a.x), int(a.y), adopt)
@@ -1119,7 +1906,9 @@ proc manage(w: Window; adopt: bool) =
   if again >= 0:
     let p = pending[again]
     pending.delete(again)
-    if not c.fixed:
+    # (a size kept from a window caught half made -- a few pixels -- is not
+    # one to give it again)
+    if not c.splash and p.w >= dpx(120) and p.h >= dpx(60):
       c.w = max(c.minW, p.w)
       c.h = max(c.minH, p.h)
     c.x = p.x
@@ -1130,7 +1919,8 @@ proc manage(w: Window; adopt: bool) =
   c.frame = XCreateSimpleWindow(dpy, root, cint(c.x), cint(c.y), cuint(c.frameW), cuint(c.frameH),
                                 0, 0, xcolor(ui.theme.face))
   discard XSelectInput(dpy, c.frame, SubstructureRedirectMask or SubstructureNotifyMask or
-                       ButtonPressMask or ButtonReleaseMask or PointerMotionMask or ExposureMask)
+                       ButtonPressMask or ButtonReleaseMask or PointerMotionMask or ExposureMask or
+                       LeaveWindowMask)
   discard XSelectInput(dpy, w, PropertyChangeMask or StructureNotifyMask)
   discard XAddToSaveSet(dpy, w)
   discard XSetWindowBorderWidth(dpy, w, 0)
@@ -1155,7 +1945,7 @@ proc manage(w: Window; adopt: bool) =
     maximize(c)
   focus(c)
   if wasIcon and c.hasButtons: minimize(c)
-  if not adopt and c.transient == None and not c.dialog and not c.fixed: playSound("open")
+  if not adopt and c.transient == None and not c.dialog and not c.splash: playSound("open")
   updateClientList()
   changedNow()
 
@@ -1170,15 +1960,16 @@ proc unmanage(c: Client; destroyed: bool) =
     setWmState(c, 0)
   discard XDestroyWindow(dpy, c.frame)
   shownCursor.del(c.frame)
-  for i in countdown(halves.high, 0):
-    if halves[i].c == c: halves.delete(i)
   for i in countdown(desktopShown.high, 0):
     if desktopShown[i] == c: desktopShown.delete(i)
   var rest: seq[Client]
   for x in clients:
     if x != c: rest.add x
   clients = rest
-  if menu.c == c: closeMenu()
+  if menuClient == c: closeMenu()
+  if flyClient == c: closeFly()
+  if hoverMax.c == c: hoverMax.c = nil
+  if c in assistList: closeAssist()
   if drag.c == c:
     drag.kind = dkNone
     discard XUngrabPointer(dpy, CurrentTime)
@@ -1196,6 +1987,14 @@ proc partAt(c: Client; x, y: int): Part =
   let fw = c.frameW
   let fh = c.frameH
   if x < 0 or y < 0 or x >= fw or y >= fh: return pNone
+  # (the top few pixels of the title bar size the window too: a thin
+  # border is hard to catch, with a finger above all)
+  let band = dpx(if bigFrames: 6 else: 3)
+  if not c.splash and not c.maximized and y < b + band and y >= b:
+    let cz = b + th
+    if x < cz: return pNW
+    if x >= fw - cz: return pNE
+    return pN
   if y >= b and y < b + th and x >= b and x < fw - b:
     let tx = x - b
     if tx < th: return pMenu
@@ -1203,7 +2002,7 @@ proc partAt(c: Client; x, y: int): Part =
       if tx >= fw - 2 * b - th: return pMax
       if tx >= fw - 2 * b - 2 * th: return pMin
     return pTitle
-  if c.fixed or c.maximized:
+  if c.splash or c.maximized:
     return (if y < b + th: pTitle else: pClient)
   let cz = b + th
   let left = x < b
@@ -1221,7 +2020,7 @@ proc partAt(c: Client; x, y: int): Part =
     return pS
   pClient
 
-proc cursorScale(): int = max(1, int(round(devScale())))
+proc cursorScale*(): int = max(1, int(round(devScale())))
 
 proc cursorFor(p: Part): culong =
   ## The classic cursors (as 3.1 had them), at the screen's scale: the
@@ -1259,9 +2058,10 @@ proc pressFrame(c: Client; e: XButtonEvent) =
       lastClick.c = nil
       maximize(c)
     else:
-      # (a maximized window does not move; holding a finger on its title
-      # still opens its menu)
+      # (a maximized or snapped window comes off its place when dragged;
+      # holding a finger on the title still opens its menu)
       drag = (dkMove, c, part, int(e.xRoot), int(e.yRoot), c.x, c.y, c.w, c.h)
+      aim = (false, false, zWhole)
   of pMin, pMax:
     c.pressed = part
     drag = (dkButton, c, part, int(e.xRoot), int(e.yRoot), c.x, c.y, c.w, c.h)
@@ -1283,12 +2083,42 @@ proc moveDrag(rx, ry: int) =
   if not moved: return
   case drag.kind
   of dkMove:
-    if c.maximized or c.fullscreen: return
+    if c.fullscreen: return
+    if c.maximized or c.zoned:
+      # (dragged off its place: its size from before, under the pointer
+      # where the title was held)
+      let frac = float(drag.rx - drag.x) / float(max(1, drag.w + 2 * bw()))
+      let grabY = drag.ry - drag.y
+      c.maximized = false
+      c.zoned = false
+      c.w = c.saved.w
+      c.h = c.saved.h
+      c.x = rx - int(frac * float(c.frameW))
+      c.y = ry - grabY
+      setNetState(c)
+      applyGeometry(c)
+      drawFrame(c)
+      drag.x = c.x
+      drag.y = c.y
+      drag.w = c.w
+      drag.h = c.h
+      drag.rx = rx
+      drag.ry = ry
+      changedNow()
+      return
     let (sw, sh) = screenSize()
+    let wr = workRect()
     let (sx, sy) = snapped(c, drag.x + dx, drag.y + dy)
     c.x = clamp(sx, -(c.frameW - dpx(40)), sw - dpx(40))
-    c.y = clamp(sy, 0, max(0, sh - topOf()))
+    c.y = clamp(sy, wr.y, max(wr.y, sh - topOf()))
     discard XMoveWindow(dpy, c.frame, cint(c.x), cint(c.y))
+    # (at an edge, a corner, the top: where it would snap, shown)
+    var a: SnapAim = (false, false, zWhole)
+    if not c.splash and c.transient == None: a = aimAt(rx, ry)
+    if a != aim:
+      aim = a
+      if a.on: showPreview(if a.whole: workRect() else: zoneRect(a.z))
+      else: hidePreview()
   of dkResize:
     var x = drag.x
     var y = drag.y
@@ -1307,6 +2137,7 @@ proc moveDrag(rx, ry: int) =
     if drag.part in {pW, pNW, pSW}: x += w - nw
     if drag.part in {pN, pNW, pNE}: y += h - nh
     if nw != c.w or nh != c.h or x != c.x or y != c.y:
+      c.zoned = false                    # (sized by hand: no longer snapped)
       c.x = x
       c.y = max(0, y)
       c.w = nw
@@ -1326,8 +2157,21 @@ proc endDrag(e: XButtonEvent) =
   if c == nil or c notin clients: return
   case kind
   of dkMove, dkResize:
+    let a = aim
+    aim = (false, false, zWhole)
+    hidePreview()
     if not moved and kind == dkMove and e.time >= pressTime and e.time - pressTime >= 550:
       openMenu(c, int(e.xRoot), int(e.yRoot))       # (held: the control menu)
+    elif moved and kind == dkMove and a.on:
+      # (let go at an edge: snapped there, its size kept for when it leaves)
+      c.saved = (drag.x, drag.y, drag.w, drag.h)
+      if a.whole:
+        maximize(c)
+      else:
+        toZone(c, a.z)
+        # (a half: the other windows offered for the other half)
+        if a.z == zLeft: openAssist(@[zRight], @[c])
+        elif a.z == zRight: openAssist(@[zLeft], @[c])
     elif moved:
       applyGeometry(c)
       drawFrame(c)
@@ -1387,48 +2231,6 @@ proc setShortcuts*(list: openArray[(string, string)]) =
     discard XUngrabKey(dpy, 0, AnyModifier, root)
     grabKeys()
 
-proc halfGeometry(c: Client; side: int) =
-  ## The left (0) or right (1) half of the screen, the frame on it.
-  let (sw, sh) = workArea()
-  let half = sw div 2
-  c.x = (if side == 0: 0 else: half)
-  c.y = 0
-  c.w = max(c.minW, half - 2 * bw())
-  c.h = max(c.minH, sh - topOf() - bw())
-
-proc toHalf*(c: Client; side: int) =
-  ## Puts a window on the left (0) or right (1) half of the screen; again on
-  ## the same side puts it back.
-  if c == nil or c.fixed or c.transient != None or c.fullscreen: return
-  var at = -1
-  for i, h in halves:
-    if h.c == c: at = i
-  if at >= 0 and halves[at].side == side:
-    halves.delete(at)
-    (c.x, c.y, c.w, c.h) = c.saved
-  else:
-    if c.iconic: restore(c)
-    if c.maximized:
-      c.maximized = false
-      setNetState(c)
-    elif at < 0: c.saved = (c.x, c.y, c.w, c.h)
-    if at >= 0: halves[at].side = side else: halves.add (c, side)
-    halfGeometry(c, side)
-  applyGeometry(c)
-  focus(c)
-  drawFrame(c)
-  changedNow()
-
-proc fromHalf(c: Client): bool =
-  ## (a window on a half: back to its size before, true)
-  for i, h in halves:
-    if h.c == c:
-      halves.delete(i)
-      (c.x, c.y, c.w, c.h) = c.saved
-      applyGeometry(c)
-      drawFrame(c)
-      return true
-
 proc showDesktopToggle() =
   ## Win+D: every window minimized; again, they come back.
   if desktopShown.len > 0:
@@ -1443,16 +2245,14 @@ proc showDesktopToggle() =
 
 proc doShortcut(action: string) =
   case action
-  of "left": toHalf(active, 0)
-  of "right": toHalf(active, 1)
-  of "maximize":
+  of "left": winArrow(active, 'L')
+  of "right": winArrow(active, 'R')
+  of "maximize": winArrow(active, 'U')
+  of "minimize": winArrow(active, 'D')
+  of "layouts":
     if active != nil:
-      discard fromHalf(active)
-      if not active.maximized: maximize(active)
-  of "minimize":
-    if active != nil:
-      if active.maximized: restore(active)
-      elif not fromHalf(active): minimize(active)
+      let r = workRect()
+      openFly(active, r.x + r.w div 2, r.y + dpx(8), keys = true)
   of "desktop": showDesktopToggle()
   else:
     if shortcut != nil: shortcut(action)
@@ -1494,12 +2294,14 @@ proc onKey(e: XKeyEvent) =
   if e.keycode == tab and (mods and Mod1Mask) != 0: switchKey((mods and ShiftMask) != 0, e.time)
   elif e.keycode == f4 and mods == Mod1Mask: close(active)
   elif e.keycode == esc and mods == ControlMask:
-    if taskList != nil: taskList()
+    if menuOpen(): closeMenu()
+    elif startMenu == nil or not startMenu():
+      if taskList != nil: taskList()
   elif e.keycode == esc and mods == Mod1Mask:
     if active != nil: minimize(active)
   elif backKey != 0 and backCloses and e.keycode == cuint(backKey):
     # (Android's Back, when Termux:X11 gives it as XF86Back: the window in front closes)
-    if menuWin != None: closeMenu()
+    if menuOpen(): closeMenu()
     elif switchWin != None: closeSwitch()
     elif active != nil: close(active)
 
@@ -1555,21 +2357,12 @@ proc onConfigureRequest(e: XConfigureRequestEvent) =
   drawFrame(c)
 
 proc screenChanged() =
-  ## The screen's size changed (the tablet turned): maximized and full
-  ## screen windows follow, the others stay on it.
-  for c in snapshot():
-    if c.fullscreen: applyGeometry(c)
-    elif c.maximized:
-      maximizeGeometry(c)
-      applyGeometry(c)
-    else:
-      fitOnScreen(c)
-      applyGeometry(c)
-    drawFrame(c)
+  ## The screen's size changed (the tablet turned): maximized, snapped and
+  ## full screen windows follow, the others stay on it.
+  workChanged()
   let (sw, sh) = screenSize()
   discard XMoveResizeWindow(dpy, desk, 0, 0, cuint(sw), cuint(sh))
   setLongs(dpy, root, atom(dpy, "_NET_DESKTOP_GEOMETRY"), XA_CARDINAL, [clong(sw), clong(sh)])
-  setLongs(dpy, root, atom(dpy, "_NET_WORKAREA"), XA_CARDINAL, [0.clong, 0, clong(sw), clong(sh)])
   changedNow()
 
 proc handle(p: pointer): bool {.nimcall.} =
@@ -1642,9 +2435,9 @@ proc handle(p: pointer): bool {.nimcall.} =
       if c.fixed and not wasFixed and c.maximized: restore(c)   # (a phone's: its own size)
       if c.dialog and not wasDialog and not c.iconic and c.transient == None:
         if c.maximized: restore(c)
-        let (sw, sh) = screenSize()
-        c.x = max(0, (sw - c.frameW) div 2)
-        c.y = max(0, (sh - c.frameH) div 3)
+        let wr = workRect()
+        c.x = max(wr.x, wr.x + (wr.w - c.frameW) div 2)
+        c.y = max(wr.y, wr.y + (wr.h - c.frameH) div 3)
         applyGeometry(c)
       if c.dialog != wasDialog or c.fixed != wasFixed: drawFrame(c)
     elif a == aNetIcon:
@@ -1655,6 +2448,12 @@ proc handle(p: pointer): bool {.nimcall.} =
   of ClientMessage:
     if e.xclient.window == desk: return false
     onClientMessage(e.xclient)
+    return true
+  of LeaveNotify:
+    let w = e.xcrossing.window
+    if w == desk: return false
+    let c = findClient(w)
+    if c != nil and c.frame == w and hoverMax.c == c: hoverMax.c = nil
     return true
   of KeyRelease:
     if switchWin != None and e.xkey.window == switchWin:
@@ -1669,8 +2468,16 @@ proc handle(p: pointer): bool {.nimcall.} =
     if w == switchWin and switchWin != None:
       if e.xexpose.count == 0: drawSwitch()
       return true
-    if w == menuWin and menuWin != None:
-      if e.xexpose.count == 0: drawMenu()
+    if isMenuWin(w):
+      if e.xexpose.count == 0:
+        for i, l in levels:
+          if l.win == w: drawLevel(i)
+      return true
+    if w == flyWin and flyWin != None:
+      if e.xexpose.count == 0: drawFly()
+      return true
+    if w == assistWin and assistWin != None:
+      if e.xexpose.count == 0: drawAssist()
       return true
     let c = findClient(w)
     if c != nil and c.frame == w:
@@ -1682,19 +2489,49 @@ proc handle(p: pointer): bool {.nimcall.} =
       closeMenu()
       if active != nil: focus(nil)
       return false
-    if menuWin != None and w == menuWin:
-      menu.armed = true
-      let i = menuItemAt(int(e.xbutton.x), int(e.xbutton.y))
-      if i < 0 and (e.xbutton.x < 0 or e.xbutton.y < 0 or e.xbutton.x >= cint(menu.w) or
-                    e.xbutton.y >= cint(menu.h)):
-        closeMenu()
+    if menuOpen() and isMenuWin(w):
+      discard menuPress(int(e.xbutton.xRoot), int(e.xbutton.yRoot))
       return true
+    if assistWin != None and w == assistWin:
+      let i = assistAt(int(e.xbutton.xRoot), int(e.xbutton.yRoot))
+      if i >= 0: assistChoose(i) else: closeAssist()
+      return true
+    if flyWin != None and w == flyWin:
+      let i = flyAt(int(e.xbutton.xRoot), int(e.xbutton.yRoot))
+      if i >= 0: flyChoose(i)
+      elif flyKeys: closeFly()
+      return true
+    if flyWin != None: closeFly()
+    if assistWin != None: closeAssist()
     let c = findClient(w)
     if c == nil: return true
     if w == c.win:
-      # (a click in a window: it comes to the front, and the click goes on to it)
       closeMenu()
       if c != active or clients[^1] != c: focus(c)
+      if (e.xbutton.state and Mod1Mask) != 0 and e.xbutton.button in [1.cuint, 3] and
+         not c.fullscreen and not c.splash:
+        # (Alt held: the window moved by the left button, sized by the
+        # right one from its nearest corner; the click is not the program's)
+        discard XAllowEvents(dpy, AsyncPointer, e.xbutton.time)
+        moved = false
+        pressTime = e.xbutton.time
+        if e.xbutton.button == 1:
+          drag = (dkMove, c, pTitle, int(e.xbutton.xRoot), int(e.xbutton.yRoot), c.x, c.y, c.w, c.h)
+          aim = (false, false, zWhole)
+        else:
+          if c.maximized or c.zoned:
+            c.maximized = false
+            c.zoned = false
+            setNetState(c)
+          let left = int(e.xbutton.x) < c.w div 2
+          let top = int(e.xbutton.y) < c.h div 2
+          let part = if top: (if left: pNW else: pNE) else: (if left: pSW else: pSE)
+          drag = (dkResize, c, part, int(e.xbutton.xRoot), int(e.xbutton.yRoot), c.x, c.y, c.w, c.h)
+        discard XGrabPointer(dpy, c.frame, 0, cuint(ButtonReleaseMask or PointerMotionMask),
+                             GrabModeAsync, GrabModeAsync, None,
+                             (if drag.kind == dkMove: fleur else: cursorFor(drag.part)), CurrentTime)
+        return true
+      # (a click in a window: it comes to the front, and the click goes on to it)
       discard XAllowEvents(dpy, ReplayPointer, e.xbutton.time)
     else:
       closeMenu()
@@ -1702,14 +2539,20 @@ proc handle(p: pointer): bool {.nimcall.} =
     return true
   of MotionNotify:
     let w = e.xmotion.window
-    if menuWin != None and w == menuWin:
-      let i = menuItemAt(int(e.xmotion.x), int(e.xmotion.y))
-      if not menu.armed and (abs(int(e.xmotion.xRoot) - menu.fromX) > dpx(6) or
-                             abs(int(e.xmotion.yRoot) - menu.fromY) > dpx(6)):
-        menu.armed = true
-      if i != menu.hot:
-        menu.hot = i
-        drawMenu()
+    if menuOpen() and isMenuWin(w):
+      menuMotion(int(e.xmotion.xRoot), int(e.xmotion.yRoot))
+      return true
+    if assistWin != None and w == assistWin:
+      let i = assistAt(int(e.xmotion.xRoot), int(e.xmotion.yRoot))
+      if i != assistHot and i >= 0:
+        assistHot = i
+        drawAssist()
+      return true
+    if flyWin != None and w == flyWin:
+      let i = flyAt(int(e.xmotion.xRoot), int(e.xmotion.yRoot))
+      if i != flyHot:
+        flyHot = i
+        drawFly()
       return true
     if drag.kind in {dkMove, dkResize}:
       moveDrag(int(e.xmotion.xRoot), int(e.xmotion.yRoot))
@@ -1720,15 +2563,17 @@ proc handle(p: pointer): bool {.nimcall.} =
       if shownCursor.getOrDefault(w, pNone) != part:
         shownCursor[w] = part
         discard XDefineCursor(dpy, w, cursorFor(part))
+      # (resting on the maximize button: the layouts, a moment later)
+      if part == pMax and c.hasButtons and drag.kind == dkNone:
+        if hoverMax.c != c and flyWin == None:
+          hoverMax = (c, epochTime())
+          wakeIn(650)
+      elif hoverMax.c == c: hoverMax.c = nil
     return w != desk
   of ButtonRelease:
     let w = e.xbutton.window
-    if menuWin != None and w == menuWin:
-      let i = menuItemAt(int(e.xbutton.x), int(e.xbutton.y))
-      if menu.armed and i >= 0 and menu.items[i].enabled:
-        let act = menu.items[i].action
-        closeMenu()
-        if act != nil: act()
+    if menuOpen() and isMenuWin(w):
+      menuRelease(int(e.xbutton.xRoot), int(e.xbutton.yRoot))
       # (the release goes on to the desktop too, where it was let go: a menu
       # opened by the desktop's press -- a right click, a finger held -- would
       # leave the desktop thinking the button is still down)
@@ -1741,8 +2586,14 @@ proc handle(p: pointer): bool {.nimcall.} =
       return true
     return w != desk
   of KeyPress:
-    if menuWin != None and e.xkey.window == menuWin:
+    if menuOpen() and isMenuWin(e.xkey.window):
       menuKey(e.xkey)
+      return true
+    if flyWin != None and e.xkey.window == flyWin:
+      flyKey(e.xkey)
+      return true
+    if assistWin != None and e.xkey.window == assistWin:
+      assistKey(e.xkey)
       return true
     if switchWin != None and e.xkey.window == switchWin:
       switchKeyEvent(e.xkey, true)

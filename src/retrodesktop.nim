@@ -18,6 +18,7 @@ proc usage() =
   echo "  retro-desktop progman     Program Manager"
   echo "  retro-desktop control     Control Panel"
   echo "  retro-desktop tasklist    Task List"
+  echo "  retro-desktop taskbar     Taskbar Properties (the panel: its edge, hiding, the Start menu)"
   echo "  retro-desktop terminal    Terminal (-e command: runs it in the Terminal)"
   echo "  retro-desktop browser     Retro Browser (Firefox in the desktop's look)"
   echo "  retro-desktop setup       Setup: programs to install (setup firefox: one at once)"
@@ -109,6 +110,7 @@ proc main(role: string) =
   of "run": runRunBox()
   of "about": runAboutBox()
   of "exit": runExitBox()
+  of "taskbar": runTaskbarBox()
   of "welcome": runWelcomeBox()
   of "tasklist", "tasks": runTaskList()
   of "clock": runClock()

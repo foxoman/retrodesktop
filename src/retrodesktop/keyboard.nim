@@ -22,14 +22,16 @@ const
   DefaultShortcuts* = [
     ("programs", "Win"), ("run", "Win+R"), ("files", "Win+E"), ("desktop", "Win+D"),
     ("left", "Win+Left"), ("right", "Win+Right"), ("maximize", "Win+Up"), ("minimize", "Win+Down"),
-    ("terminal", "Ctrl+Alt+T"), ("tasklist", "Ctrl+Shift+Esc"), ("control", "Win+I"), ("lock", "Win+L")]
+    ("terminal", "Ctrl+Alt+T"), ("tasklist", "Ctrl+Shift+Esc"), ("control", "Win+I"), ("lock", "Win+L"),
+    ("layouts", "Win+Z")]
     ## Every shortcut and its keys at first (Control Panel > Keyboard changes them).
-  ShortcutNames* = [("programs", "Open the Programs menu"), ("run", "Run a program"),
+  ShortcutNames* = [("programs", "Open the Start menu"), ("run", "Run a program"),
                     ("files", "Open File Manager"), ("desktop", "Show the desktop (and back)"),
                     ("left", "The window on the left half"), ("right", "The window on the right half"),
                     ("maximize", "Maximize the window"), ("minimize", "Restore or minimize the window"),
                     ("terminal", "Open the Terminal"), ("tasklist", "Open Task List"),
-                    ("control", "Open Control Panel"), ("lock", "Lock the screen (screen saver)")]
+                    ("control", "Open Control Panel"), ("lock", "Lock the screen (screen saver)"),
+                    ("layouts", "Snap the window: its layouts")]
     ## What each shortcut does, as Control Panel shows it.
 
 proc layoutsOf*(s: Settings): seq[string] =

@@ -34,6 +34,9 @@ proc deskFolder*(): string =
   result = standardFolder("desktop")
   if result.len == 0: result = getHomeDir() / "Desktop"
 
+var area: tuple[l, t, r, b: int]
+  ## (the room the panel leaves, as the desktop counts: icons stay out of it)
+
 proc cellW(): int = dp(if touch: 96 else: 80)
 proc cellH(): int = dp(if touch: 82 else: 72)
 
@@ -47,12 +50,13 @@ proc place(top: int) =
   ## The icons not placed yet: in columns from the top left, where none is.
   let cw = cellW()
   let ch = cellH()
-  let rows = max(1, (ui.h - top - dp(60)) div ch)
+  let top = max(top, area.t)
+  let rows = max(1, (ui.h - top - area.b - dp(60)) div ch)
   var k = 0
   for it in icons.mitems:
     if it.x >= 0: continue
     while true:
-      let x = dp(8) + (k div rows) * cw
+      let x = area.l + dp(8) + (k div rows) * cw
       let y = top + dp(8) + (k mod rows) * ch
       inc k
       var taken = false
@@ -167,10 +171,18 @@ proc iconMenu(i: int; sx, sy: int) =
 proc drawDeskIcons*(touchMode: bool; top = 0) =
   ## The desktop's icons, over the wallpaper and under every window.
   touch = touchMode
+  # (the panel on the left or at the top: the icons beside it, not under it)
+  let z = max(1, pxScale)
+  area = (workInset.left div z, workInset.top div z, workInset.right div z, workInset.bottom div z)
+  let top = max(top, area.t)
   look(top)
   if icons.len == 0: return
   let cw = cellW()
   let ch = cellH()
+  for it in icons.mitems:
+    if it.x >= 0:
+      it.x = clamp(it.x, area.l, max(area.l, ui.w - area.r - cw))
+      it.y = clamp(it.y, top, max(top, ui.h - area.b - ch))
   let isz = dp(32)
   let lh = lineHeight()
   for i in 0 ..< icons.len:
@@ -220,8 +232,8 @@ proc drawDeskIcons*(touchMode: bool; top = 0) =
     if ui.mouseDown:
       if abs(ui.mx - pressX) + abs(ui.my - pressY) > dp(6): moved = true
       if moved:
-        icons[drag].x = clamp(ui.mx - grabX, 0, ui.w - cw)
-        icons[drag].y = clamp(ui.my - grabY, top, ui.h - ch)
+        icons[drag].x = clamp(ui.mx - grabX, area.l, max(area.l, ui.w - area.r - cw))
+        icons[drag].y = clamp(ui.my - grabY, top, max(top, ui.h - area.b - ch))
         ui.redraw = true
     else:
       if moved: keepPlaces()

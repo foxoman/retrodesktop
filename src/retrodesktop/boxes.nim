@@ -277,3 +277,119 @@ proc runNotify*(args: seq[string]) =
     endFrame()
     appFrameDone()
   closeApp()
+
+# ---- Taskbar Properties -----------------------------------------------------------------------------
+
+const PanelEdges = ["bottom", "top", "left", "right"]
+
+proc drawPanelPreview(edge: int; onTop, autoHide, clock: bool) =
+  ## A little screen with the panel as chosen: on its edge, over a window
+  ## or under it, hidden to a line.
+  let t = ui.theme
+  let r = canvas(ui.w - 2 * Pad, dp(110))
+  let sw = min(r.w, dp(220))
+  let scr = rect(r.x + (r.w - sw) div 2, r.y, sw, r.h)
+  fill(scr, t.frame)
+  let s = rect(scr.x + dp(4), scr.y + dp(4), scr.w - dp(8), scr.h - dp(8))
+  fill(s, hexColor(Teal, color(0, 128, 128)))
+  let th = if autoHide: max(2, dp(2)) else: dp(13)
+  let sideW = if autoHide: max(2, dp(2)) else: dp(34)
+  let bar = case edge
+            of 1: rect(s.x, s.y, s.w, th)
+            of 2: rect(s.x, s.y, sideW, s.h)
+            of 3: rect(s.x + s.w - sideW, s.y, sideW, s.h)
+            else: rect(s.x, s.y + s.h - th, s.w, th)
+  let win = rect(s.x + s.w div 5, s.y + s.h div 6, s.w * 3 div 5, s.h * 2 div 3 + dp(6))
+  proc drawWin() =
+    fill(win, t.window)
+    box(win, t.frame)
+    fill(rect(win.x + 1, win.y + 1, win.w - 2, dp(9)), t.select)
+  proc drawBar() =
+    fill(bar, t.face)
+    if autoHide: return
+    let horizontal = edge in [0, 1]
+    let b = if horizontal: rect(bar.x + dp(2), bar.y + dp(2), dp(16), bar.h - dp(4))
+            else: rect(bar.x + dp(2), bar.y + dp(2), bar.w - dp(4), dp(9))
+    raised(b, 1)
+    if clock:
+      let c = if horizontal: rect(bar.x + bar.w - dp(24), bar.y + dp(2), dp(22), bar.h - dp(4))
+              else: rect(bar.x + dp(2), bar.y + bar.h - dp(11), bar.w - dp(4), dp(9))
+      sunken(c)
+  if onTop:
+    drawWin()
+    drawBar()
+  else:
+    drawBar()
+    drawWin()
+
+proc runTaskbarBox*() =
+  ## Taskbar Properties, as 95's: where the panel is, whether it stays over
+  ## the windows or hides itself, the Start menu's pictures, the clock; and
+  ## the Start menu's Documents emptied.
+  const Title = "Taskbar Properties"
+  if bringBack(Title): return
+  openBox(Title, 440, 370, "taskbar")
+  let conf = desktopSettings()
+  var edge = max(0, PanelEdges.find(conf.setting("panelEdge", "bottom")))
+  var onTop = conf.setting("panelOnTop", "on") != "off"
+  var autoHide = conf.setting("panelAutoHide", "off") == "on"
+  var small = conf.setting("startSmallIcons", "off") == "on"
+  var clock = conf.setting("panelClock", "on") != "off"
+  var h24 = conf.setting("clock24", "on") != "off"
+  var tab = 0
+  var docs = recentDocuments().len
+  template now(): untyped = (edge, onTop, autoHide, small, clock, h24)
+  var saved = now()
+  proc keep(v: tuple[edge: int; onTop, autoHide, small, clock, h24: bool]) =
+    var s = desktopSettings()
+    s["panelEdge"] = PanelEdges[v.edge]
+    s["panelOnTop"] = (if v.onTop: "on" else: "off")
+    s["panelAutoHide"] = (if v.autoHide: "on" else: "off")
+    s["startSmallIcons"] = (if v.small: "on" else: "off")
+    s["panelClock"] = (if v.clock: "on" else: "off")
+    s["clock24"] = (if v.h24: "on" else: "off")
+    saveDesktopSettings(s)
+    retroCommand(RetroLookChanged)
+  while beginFrame():
+    tabs(tab, ["Taskbar &Options", "&Start Menu Programs"]):
+      if tab == 0:
+        drawPanelPreview(edge, onTop, autoHide, clock)
+        row:
+          label("&Position:")
+          radio("&Bottom", edge, 0)
+          radio("To&p", edge, 1)
+          radio("&Left", edge, 2)
+          radio("&Right", edge, 3)
+        checkbox("&Always on top", onTop)
+        checkbox("A&uto hide", autoHide)
+        checkbox("Show s&mall icons in Start menu", small)
+        checkbox("Show &Clock", clock)
+        checkbox("24-&hour clock", h24, enabled = clock)
+        paragraph("The taskbar can also be dragged by its empty part to any edge of the " &
+                  "screen, and made larger by its inner edge.")
+      else:
+        group("Documents Menu"):
+          paragraph("The files you open are kept in the Start menu's Documents. To empty it, press Clear.")
+          row:
+            spring()
+            if button("C&lear", enabled = docs > 0):
+              clearRecent()
+              docs = 0
+        group("Programs"):
+          paragraph("The Start menu's Programs are Program Manager's groups: add, remove or " &
+                    "arrange your programs there.")
+          row:
+            spring()
+            if button("Program &Manager..."): launch(selfCommand("progman"))
+    row:
+      spring()
+      if button("OK", isDefault = true):
+        if now() != saved: keep(now())
+        quitApp()
+      if button("Cancel") or ui.key == KeyEsc: quitApp()
+      if button("&Apply", enabled = now() != saved):
+        keep(now())
+        saved = now()
+    endFrame()
+    appFrameDone()
+  closeApp()

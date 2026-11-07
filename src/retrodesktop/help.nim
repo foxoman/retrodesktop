@@ -36,8 +36,17 @@ Choose a topic:
 
 Every program opens in its own window.
 
-* **Move** a window by its title bar; **size** it by its border or a corner.
-  Near an edge of the screen or of another window it snaps against it.
+* **Move** a window by its title bar; **size** it by its border, a corner or
+  the top edge of its title bar. Every window can be sized. Near an edge of the
+  screen or of another window it snaps against it. Alt with the left button
+  moves a window from anywhere in it; Alt with the right button sizes it.
+* **Snap** it as Windows 11 does: dragged to the left or right edge of the
+  screen it fills that half, to a corner that quarter, to the top the whole
+  screen -- a frame shows where before you let go. Then the other windows are
+  offered for the rest: choose one, or press Esc. Rest the pointer on the
+  **maximize** button (or press Win+Z) for the **layouts**: halves, thirds,
+  quarters; a click on a part puts the window there. Dragged away, a snapped
+  window comes back to its own size.
 * The **minimize** button (the arrow down) puts it away: a button on the
   [panel](topic:panel) (or, with the panel off, an icon at the bottom of the
   desktop: double click it -- tap it -- to bring it back).
@@ -62,11 +71,12 @@ where they were. See also [Keys](topic:keys) and [Contents](topic:contents).
 | Alt+Shift+Tab | the other way |
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
-| Ctrl+Esc | the Task List |
-| Win | the panel's Programs menu (Program Manager with the panel off) |
+| Win, Ctrl+Esc | the Start menu (with the panel off: Program Manager, and Ctrl+Esc the Task List) |
 | Win+R, Win+E, Win+I | Run, File Manager, Control Panel |
-| Win+Left, Win+Right | the window on the left or right half of the screen (again: back) |
-| Win+Up, Win+Down | maximize; restore or minimize |
+| Win+Left, Win+Right | the window on the left or right half of the screen; from the other half: back to its size |
+| Win+Up | a half to its top quarter, a bottom quarter to its half, else maximize |
+| Win+Down | maximized: restored; a half to its bottom quarter; snapped: back to its size; else minimize |
+| Win+Z | the window's layouts (the arrows, Enter) |
 | Win+D | every window minimized (again: back) |
 | Win+L | locks the screen (the screen saver; its password when it has one) |
 | Ctrl+Alt+T | Terminal |
@@ -188,7 +198,7 @@ makes one; Search > Go To finds a word on the cards. [Contents](topic:contents)
   ("tasklist", "Task List", """
 # Task List
 
-Ctrl+Esc: every window, and the memory its program takes (its own share).
+Ctrl+Shift+Esc: every window, and the memory its program takes (its own share).
 Switch To brings one to the front; End Task ends a program that does not
 answer; Cascade and Tile arrange the windows. [Contents](topic:contents)
 """),
@@ -289,21 +299,33 @@ Settings...) are not listed. [Contents](topic:contents)
   ("panel", "The panel", """
 # The panel
 
-A bar along the bottom of the screen -- 3.1 had none: it came with Windows
-95, and here it wears 3.1's colors.
+A bar along an edge of the screen -- 3.1 had none: it came with Windows 95,
+and here it wears 3.1's colors.
 
-* **Programs**, at the left: every group of Program Manager in a menu, and
-  Run, Help, Control Panel, Task List, Exit.
+* **Start**, the button with the desktop's picture: the Start menu, as 95's --
+  **Programs** (every group of Program Manager, each opening beside it),
+  **Documents** (the files you opened last), **Settings** (Control Panel, the
+  Taskbar), **Find**, **Help**, **Run** and **Shut Down**. The Windows key and
+  Ctrl+Esc open it too.
 * A **button for each window**: a click brings it to the front, a click on the
-  one in front minimizes it; a right click opens its control menu.
+  one in front minimizes it; a right click opens its control menu. Resting on
+  a button shows the window's whole title; resting on the clock, the date.
 * At the right, the tray: the **keyboard's layout** (EN, ع: a click goes
   to the next), the **volume** (a click for its menu, the wheel up and down),
   **Wi-Fi**, the **notifications** (a bell; a click lists the last ones), the
   battery and the clock (a click opens Clock).
 
-In Arabic it turns right to left: Programs at the right, the tray at the
-left. Control Panel > Windows turns it off: the windows minimized are icons at
-the bottom of the desktop again, as in 3.1. [Contents](topic:contents)
+**Move it** by dragging its empty part to any edge -- bottom, top, left or
+right. **Make it larger** by dragging its inner edge: rows of buttons along the
+bottom or the top, wider on a side. A right click on its empty part: Cascade,
+Tile, Minimize All Windows, Task List and **Properties**, the Taskbar's box --
+its edge, **Always on top** (off: windows go over it and use the whole screen),
+**Auto hide** (it hides until the pointer comes to its edge), small pictures in
+the Start menu, the clock, and the Documents emptied.
+
+In Arabic it turns right to left: Start at the right, the tray at the left.
+Control Panel > Windows turns it off: the windows minimized are icons at the
+bottom of the desktop again, as in 3.1. [Contents](topic:contents)
 """),
   ("icons", "Icons on the desktop", """
 # Icons on the desktop
@@ -604,7 +626,7 @@ const TourPages = [
    "installs more -- browsers, office, development, games -- from Termux's packages."),
   ("The desktop's menu", "A right click on the desktop -- or a finger held on it -- " &
    "opens its menu: the Task List, Control Panel, the Terminal, Run, Cascade, Tile."),
-  ("Switching", "Alt+Tab shows the next window while Alt is held; Ctrl+Esc lists them " &
+  ("Switching", "Alt+Tab shows the next window while Alt is held; Ctrl+Shift+Esc lists them " &
    "all with the memory each takes. The keyboard bar of Termux:X11 has Alt, Ctrl and Esc."),
   ("Help is near", "F1 in any program opens its Help. Control Panel changes the colors, " &
    "the wallpaper, the sizes and the sounds. Android Files, in Main, shows your phone's files.")]

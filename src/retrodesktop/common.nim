@@ -11,7 +11,7 @@ import ar, hijri
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.13"
+  DesktopVersion* = "0.1.14"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -37,6 +37,31 @@ proc setting*(s: Settings; key, default: string): string =
 
 proc saveDesktopSettings*(s: Settings) = discard saveSettings(SettingsName, s)
   ## Keeps the desktop's settings.
+
+proc recentFile(): string = dataDir(SettingsName) / "documents"
+
+proc recentDocuments*(): seq[string] =
+  ## The files opened last, the newest first (the Start menu's Documents);
+  ## those gone since are left out.
+  try:
+    for line in readFile(recentFile()).splitLines:
+      if line.len > 0 and fileExists(line) and line notin result: result.add line
+  except CatchableError: discard
+
+proc noteRecent*(path: string) =
+  ## `path` was opened: the first of the Documents, which keep fifteen.
+  if not fileExists(path): return
+  var list = @[path]
+  for p in recentDocuments():
+    if p != path and list.len < 15: list.add p
+  try:
+    createDir(recentFile().parentDir)
+    writeFile(recentFile(), list.join("\n") & "\n")
+  except CatchableError: discard
+
+proc clearRecent*() =
+  ## The Documents emptied (Taskbar Properties).
+  try: removeFile(recentFile()) except CatchableError: discard
 
 proc hexColor*(s: string; default: Color): Color =
   ## "#rrggbb" as a color (`default` when it is not one).

@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.1.14
+
+- **The panel is Windows 95's taskbar**, in 3.1's colors: the **Start**
+  button (the desktop's picture, no word on it) and its Start menu --
+  Programs, Documents, Settings, Find, Help, Run, Shut Down, a band down its
+  side and large pictures; each opens its menu beside it when the pointer
+  rests on it (or Right), as 95's did. Programs holds every group of
+  Program Manager, Documents the files opened last. The Windows key and
+  Ctrl+Esc open it (Ctrl+Esc the Task List with the panel off). The other
+  menus keep 3.1's look.
+- **The panel goes on any edge**: drag its empty part to the bottom, the
+  top, the left or the right; drag its inner edge for more rows of buttons
+  (or a wider panel on a side). A right click on it: Cascade, Tile
+  Horizontally, Tile Vertically, Minimize All Windows, Task List,
+  Properties. **Taskbar Properties** (`retro-desktop taskbar`): its edge,
+  Always on top (off: windows go over it and take the whole screen), Auto
+  hide (it hides until the pointer comes to its edge), small pictures in
+  the Start menu, the clock, and the Documents emptied. Resting on a
+  window's button shows its whole title, on the clock the date. The
+  desktop's icons stay beside the panel, not under it.
+- **Every window can be sized** -- the ones that asked for one size too --
+  by its border, its corners or the top of its title bar; Alt with the left
+  button moves a window from anywhere in it, Alt with the right button
+  sizes it.
+- **Snapping as in Windows 11**: a window dragged to the left or right edge
+  fills that half, to a corner that quarter, to the top the whole screen,
+  with a frame showing where before it is let go; the other windows are
+  then offered for the rest (Snap Assist). Resting on the maximize button
+  (or Win+Z) shows the layouts -- halves, two thirds and a third, thirds, a
+  half and two quarters, quarters -- and a click puts the window in that
+  part. Win+arrows move a window between halves and quarters as Windows
+  11's do. A snapped or maximized window dragged away comes back to its
+  own size under the pointer.
+- **Media Player no longer hangs**: when mpv ended under it, the player
+  tried to write to it forever and took the processor (a socket closed at
+  the other end was taken for a busy one); now it starts mpv again. mpv
+  ended when its video window closed on some screens (it closed file 0
+  again and again, and once that was its X connection, it lost it): the
+  player now gives mpv EGL on X11 when it has it, else X11's own output,
+  and a song's cover no longer opens a window. An mpv a killed player left
+  behind is ended the next time. Its buttons fit the window.
+- **Sound Recorder**: Termux:API's microphone is started and stopped
+  without waiting for it, so the recorder never freezes while Android asks
+  for the microphone; it says when Termux:API does not answer, and when
+  the recording stopped by itself. Its folder fits on one line.
+- **The desktop starts again by itself** when it fails (a crash), within a
+  moment, keeping every window; it gives up after five failures in a
+  minute. Each one is written in desktop.log.
 ## 0.1.13
 
 - **Faster and lighter** (Retro Nim UI 0.26.0): every program of the

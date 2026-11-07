@@ -54,6 +54,19 @@ type
     isHint*: char
     sameScreen*: XBool
 
+  XCrossingEvent* = object
+    ## The pointer came into a window or left it (EnterNotify, LeaveNotify).
+    theType*: cint
+    serial*: culong
+    sendEvent*: XBool
+    display*: Display
+    window*, root*, subwindow*: Window
+    time*: Time
+    x*, y*, xRoot*, yRoot*: cint
+    mode*, detail*: cint
+    sameScreen*, focus*: XBool
+    state*: cuint
+
   XExposeEvent* = object
     theType*: cint
     serial*: culong
@@ -131,6 +144,7 @@ type
     xkey*: XKeyEvent
     xbutton*: XButtonEvent
     xmotion*: XMotionEvent
+    xcrossing*: XCrossingEvent
     xexpose*: XExposeEvent
     xmaprequest*: XMapRequestEvent
     xconfigurerequest*: XConfigureRequestEvent
@@ -198,6 +212,8 @@ const
   ButtonPress* = 4.cint
   ButtonRelease* = 5.cint
   MotionNotify* = 6.cint
+  EnterNotify* = 7.cint
+  LeaveNotify* = 8.cint
   Expose* = 12.cint
   DestroyNotify* = 17.cint
   UnmapNotify* = 18.cint
@@ -213,6 +229,7 @@ const
   ButtonPressMask* = 4.clong
   ButtonReleaseMask* = 8.clong
   EnterWindowMask* = 16.clong
+  LeaveWindowMask* = 32.clong
   PointerMotionMask* = 64.clong
   ButtonMotionMask* = 8192.clong
   ExposureMask* = 32768.clong
@@ -237,6 +254,7 @@ const
   IsViewable* = 2.cint
   GrabModeSync* = 0.cint
   GrabModeAsync* = 1.cint
+  AsyncPointer* = 0.cint
   ReplayPointer* = 2.cint
   RevertToPointerRoot* = 1.cint
   PointerRoot* = 1.Window

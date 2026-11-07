@@ -19,20 +19,39 @@ one program of about 5 MB, nothing to set up.
   panel (or, with the panel off, icons along the bottom of the desktop, as
   3.1 had them). Click to bring a window to the front; Alt+Tab
   shows 3.1's box with the next window while Alt is held; Alt+F4 closes
-  one. Windows snap to the screen's edges and to each other as you move
-  them. Dialogs open over their windows, programs that go full screen
-  (videos, games) get the whole screen, and the windows follow when the
-  tablet turns. The programs open when the desktop ended -- you exited, or
-  Android stopped Termux -- open again where they were the next time.
-- **The panel**, along the bottom: Windows 95's idea in 3.1's colors --
-  **Programs** with every group of Program Manager as a menu, each program
-  with its icon (and Run, Help, Control Panel, Task List, Exit), a button
-  for each window, the battery and the clock. Control Panel > Windows turns it off.
+  one. Every window can be sized -- by its border, a corner, the top of its
+  title bar, or Alt with the right button; Alt with the left button moves
+  it from anywhere. Windows snap to the screen's edges and to each other as
+  you move them. Dialogs open over their windows, programs that go full
+  screen (videos, games) get the whole screen, and the windows follow when
+  the tablet turns. The programs open when the desktop ended -- you exited,
+  or Android stopped Termux -- open again where they were the next time.
+- **Snapping as in Windows 11:** drag a window to the left or right edge
+  and it fills that half, to a corner that quarter, to the top the whole
+  screen (a frame shows where first); then the other windows are offered
+  for the rest. Rest the pointer on the maximize button (or press Win+Z)
+  for the layouts -- halves, two thirds and a third, thirds, a half and two
+  quarters, quarters -- and click a part. Win+arrows move a window between
+  the halves and quarters as Windows 11 does; dragged away, a window comes
+  back to its own size.
+
+  ![Snapping: three windows in their parts, the layouts on a maximize button](docs/snap.png)
+- **The panel**, Windows 95's taskbar in 3.1's colors: the **Start**
+  button (the desktop's picture, no word on it) opens the Start menu as
+  95's -- Programs (every group of Program Manager, each opening beside
+  it, each program with its icon), Documents (the files opened last),
+  Settings, Find, Help, Run, Shut Down -- with the band down its side and
+  large pictures. A button for each window, the tray, the clock (resting on
+  it: the date). Drag it to any edge -- bottom, top, left, right --, make it
+  taller or wider by its inner edge; a right click on it: Cascade, Tile,
+  Minimize All Windows, Task List, Properties (Always on top, Auto hide,
+  small pictures in the Start menu, the clock). Control Panel > Windows
+  turns it off.
 - **Icons on the desktop:** what is in your Desktop folder -- folders,
   files, programs -- where you drag them; Program Manager's File > Put on
   the Desktop makes a program's icon.
 
-  ![The panel, the desktop's icons and the new accessories](docs/panel.png)
+  ![The panel and its Start menu, the windows snapped](docs/panel.png)
 
 - **Program Manager**, with the groups 3.1 had -- Main, Accessories,
   StartUp -- and a group for each kind of program you install: Internet,
@@ -112,7 +131,7 @@ one program of about 5 MB, nothing to set up.
 
 - **English or Arabic:** Control Panel > International puts the desktop's
   programs, its menus, the frames' titles and Help in Arabic, right to
-  left -- the panel too: Programs at the right, the tray at the left.
+  left -- the panel too: Start at the right, the tray at the left.
 - **The same look for the other programs.** GTK programs (and Chromium,
   Electron, Firefox) get the color scheme as a "Retro31" GTK theme with
   3.1 scroll bars (always there, with arrows), the 3.1 cursors at the
@@ -135,8 +154,9 @@ one program of about 5 MB, nothing to set up.
   Windows): no CPU, no battery, until you bring them back. OpenGL programs
   can draw on Android's GPU (Setup > System > 3D graphics: VirGL; the
   desktop starts its server).
-- **The keyboard:** the Windows key opens Programs; Win+R, Win+E, Win+D,
-  Win+L, Win+arrows (half the screen, maximize, minimize), Ctrl+Alt+T,
+- **The keyboard:** the Windows key and Ctrl+Esc open the Start menu; Win+R,
+  Win+E, Win+D, Win+L, Win+arrows (halves, quarters, maximize, minimize),
+  Win+Z (the layouts), Ctrl+Alt+T,
   Ctrl+Shift+Esc -- Control Panel > Keyboard changes them. English and
   Arabic (or other layouts) with Alt+Shift, the panel showing EN or ع; how
   fast a key repeats.
@@ -218,11 +238,13 @@ that with the issue. Control Panel > System Check shows what is missing. `pkill 
 | Alt+Shift+Tab | the other way |
 | Alt+F4 | closes the window in front |
 | Alt+Esc | minimizes it |
-| Ctrl+Esc, Ctrl+Shift+Esc | Task List |
-| Win | the panel's Programs menu |
+| Win, Ctrl+Esc | the Start menu (with the panel off: Program Manager; Ctrl+Esc the Task List) |
+| Ctrl+Shift+Esc | Task List |
 | Win+R, Win+E, Win+I | Run, File Manager, Control Panel |
-| Win+Left, Win+Right | the window on half the screen (again: back) |
-| Win+Up, Win+Down | maximize; restore or minimize |
+| Win+Left, Win+Right | the window on the left or right half (from the other half: back to its size) |
+| Win+Up | a half to its top quarter, a bottom quarter to its half, else maximize |
+| Win+Down | restore a maximized window; a half to its bottom quarter; a snapped one back to its size; else minimize |
+| Win+Z | the window's layouts (the arrows and Enter choose) |
 | Win+D | every window minimized (again: back) |
 | Win+L | lock the screen |
 | Ctrl+Alt+T | Terminal |
@@ -235,7 +257,8 @@ that with the issue. Control Panel > System Check shows what is missing. `pkill 
 A right click on the desktop (a finger held on it) opens its menu, over
 every window: Program Manager, Task List, Control Panel, Terminal, Run...,
 Cascade, Tile, Arrange Icons, Exit. Menus work as 3.1's: the underlined
-letter chooses an item, the arrows and Enter too, Esc closes. Double click a title bar to maximize a window; double click its
+letter chooses an item, the arrows and Enter too (Right opens the menu
+beside, Left closes it), Esc closes. Double click a title bar to maximize a window; double click its
 control-menu box to close it.
 
 Menus open with a click or a finger, and the underlined letter, the
