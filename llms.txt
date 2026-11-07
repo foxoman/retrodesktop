@@ -21,10 +21,15 @@ the windows, the clock) and the Desktop folder's icons.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
-- Build: `nimble build -d:release` (needs retroui >= 0.21.0); the Termux
+- Build: `nimble build -d:release` (needs retroui >= 0.26.0); the Termux
   package: `sh tools/build-deb.sh` (with Retro Nim UI's Files, Board, Photo,
   Notepad, Mail and Communicator; Mail's app IDs from RETRO_MAIL_* in the
   environment while it builds).
+- Screen readers: the programs tell Orca what they show through retroui's
+  AT-SPI; the session starts a session bus where AT-SPI is installed and
+  none was started (session.nim, `startScreenReaders`); the desktop's icons
+  (deskicons.nim), minimized windows' icons and the Terminal's screen give
+  their own nodes (`accessNode`).
 - The window manager runs on the desktop's own X connection (retroui's
   `x11EventHook`); frames are X windows with title bars drawn by retroui's
   canvas.

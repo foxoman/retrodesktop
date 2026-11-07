@@ -166,7 +166,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.12_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.13_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -262,6 +262,12 @@ or in a window of your own desktop with Xephyr:
 Xephyr :2 -screen 1280x800 & DISPLAY=:2 retro-desktop
 ```
 
+Screen readers: with AT-SPI installed (`at-spi2-core`) and Orca running,
+the desktop and its programs are read and used from Orca -- their buttons,
+boxes, lists, menus and tabs, the desktop's icons and the icons of
+minimized windows, the Terminal's screen as its text. Started from a
+console, the desktop starts a session bus for its programs on its own.
+
 ## Building it
 
 You need [Nim](https://nim-lang.org) 2.2 or later and
@@ -294,7 +300,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.12 && git push origin v0.1.12`).
+tag is pushed (`git tag v0.1.13 && git push origin v0.1.13`).
 
 ## How it works
 

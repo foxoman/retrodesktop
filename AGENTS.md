@@ -22,11 +22,15 @@ alike.
   - `wm.nim` -- the window manager (frames, focus, keys, EWMH/ICCCM), on the
     desktop's X connection through Retro Nim UI's `x11EventHook`
   - `session.nim` -- the desktop: background, icons, menu, welcome, exit,
-    memory, night colors
+    memory, night colors; a session bus for screen readers where AT-SPI is
+    installed and none was started (`startScreenReaders`)
   - `panel.nim` -- the panel: Programs, the windows' buttons, the clock
     (an override-redirect window the manager keeps on top, `wm.onTop`, and
     leaves room for, `wm.workBottom`)
-  - `deskicons.nim` -- the icons of the Desktop folder on the desktop
+  - `deskicons.nim` -- the icons of the Desktop folder on the desktop (each a
+    node for screen readers, as the minimized windows' icons and the
+    Terminal's screen are: what is drawn by hand says what it is with
+    `accessNode`)
   - `catalog.nim` -- every program in its group, for Program Manager and
     the panel (the desktop's own, DOS, Android, installed, the user's)
   - `charmap.nim`, `viewers.nim` (Picture Viewer, PDF Reader, Camera),

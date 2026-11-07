@@ -787,6 +787,18 @@ proc runTerminal*(args: seq[string]) =
       quitApp()
     mouse(r)
     drawScreen(r, ui.active31)
+    if accessible():
+      # (a screen reader reads the screen as text, the caret where the cursor is)
+      var t = ""
+      var caret = 0
+      for row in 0 ..< scr.rows:
+        if row == scr.cy: caret = t.runeLen + min(scr.cx, lineText(scr.lines[row]).runeLen)
+        t.add lineText(scr.lines[row]).strip(leading = false)
+        if row < scr.rows - 1: t.add '\n'
+      let k = accessNode(arTextArea, "Terminal", t.strip(leading = false), {asMultiLine},
+                         idOf("terminal-screen"), r)
+      accessText(k, caret, caret, caret)
+      if ui.dialogTop == 0 and ui.popup == 0: accessFocus(k)
     if scr.title != lastTitle:
       lastTitle = scr.title
       setTitle(if scr.title.len > 0: scr.title else: "Terminal")

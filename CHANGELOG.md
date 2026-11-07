@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.13
+
+- **Faster and lighter** (Retro Nim UI 0.26.0): every program of the
+  desktop draws straight into memory the X server shares (MIT-SHM) --
+  nothing copied on the way to the screen --, a frame where nothing changed
+  takes no memory, and the icons are made only when they are shown: each
+  program starts with about 2 MB less. The package brings libxext and
+  libandroid-shmem for it.
+- **Screen readers**: the desktop and its programs tell Orca what they show
+  (AT-SPI): every button, box, list, menu and tab, read and used from the
+  screen reader. Where AT-SPI is installed (a Linux computer) and the
+  desktop was started without a session bus, it starts one for its
+  programs; in Termux nothing more is started. The desktop's icons and the
+  icons of minimized windows are read as buttons (a press opens or brings
+  back), and the Terminal's screen is read as its text, the caret where the
+  cursor is.
+- **Typing through an input method** (IBus, Fcitx, uim -- Chinese,
+  Japanese, Korean): what it composes shows in the text box at the caret,
+  underlined, and its list of candidates opens there.
+- Needs Retro Nim UI 0.26.0.
+
 ## 0.1.12
 
 - **Communicator 1.2** (Retro Nim UI 0.23.0): end-to-end encryption with

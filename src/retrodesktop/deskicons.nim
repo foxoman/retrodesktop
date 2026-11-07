@@ -178,6 +178,13 @@ proc drawDeskIcons*(touchMode: bool; top = 0) =
     let r = rect(it.x, it.y, cw, ch)
     let id = idOf("desk:" & it.path)
     let hit = interact(id, r, focusable = false)
+    if accessible():
+      # (a screen reader's press opens it, as a double click does)
+      accessNode(arButton, it.name, id = id, r = r, states = (if i == sel: {asSelected} else: {}),
+                 help = "desktop icon")
+      if accessPressed == id:
+        sel = i
+        openIcon(it)
     let picR = rect(r.x + (r.w - isz) div 2, r.y + dp(4), isz, isz)
     drawBitmap(picR, pictureOf(it, isz * max(1, pxScale)))
     # (the name, on two lines at most, as 3.1's icons wrapped them)
@@ -192,7 +199,7 @@ proc drawDeskIcons*(touchMode: bool; top = 0) =
       if chosen: fill(tr, ui.theme.select)
       if not chosen: text(tr.x + dp(3), tr.y + 1, line, color(0, 0, 0))
       text(tr.x + dp(2), tr.y, line, (if chosen: ui.theme.selectText else: color(255, 255, 255)))
-    if ui.pressed and ui.active == id:
+    if ui.pressed and ui.active == id and accessPressed != id:
       # (the press is this icon's: `interact` took it)
       if sel == i and ui.clicks >= 2:
         openIcon(it)

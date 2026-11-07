@@ -92,7 +92,7 @@ Version: $VERSION
 Architecture: $ARCH
 Maintainer: Sultan Al Isaiee <sultan@foxoman.net>
 Installed-Size: $SIZE
-Depends: libx11, libxss, termux-x11-nightly, libcurl, openssl
+Depends: libx11, libxext, libxss, libandroid-shmem, termux-x11-nightly, libcurl, openssl
 Homepage: https://github.com/foxoman/retrodesktop
 Description: A Windows 3.1 style desktop for Termux:X11
  Retro Desktop is a desktop and window manager in the style of Windows 3.1

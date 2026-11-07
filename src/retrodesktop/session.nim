@@ -211,6 +211,28 @@ var
   restStarted = false
   startedAt = 0
 
+proc startScreenReaders() =
+  ## Screen readers (Orca) read the desktop and its programs through AT-SPI:
+  ## where it is installed and the session has no bus of its own yet (a
+  ## desktop started from a console), a session bus is started for the
+  ## programs, which reach the accessibility bus through it. Where AT-SPI
+  ## is not installed (Termux) nothing is started.
+  if getEnv("DBUS_SESSION_BUS_ADDRESS").len > 0 or findExe("dbus-daemon").len == 0: return
+  let prefix = getEnv("PREFIX", "/usr")
+  if not (fileExists(prefix / "libexec/at-spi-bus-launcher") or
+          fileExists("/usr/libexec/at-spi-bus-launcher") or
+          fileExists("/usr/lib/at-spi2-core/at-spi-bus-launcher")): return
+  # (its address into a file: the bus, which stays, keeps no pipe of ours
+  # open -- reading one would wait for it to end)
+  let f = getTempDir() / "retrodesktop-bus-" & $getCurrentProcessId()
+  try:
+    if execShellCmd("dbus-daemon --session --fork --print-address=3 3>" & quoteShell(f) &
+                    " >/dev/null 2>&1 </dev/null") == 0:
+      let a = readFile(f).strip.splitLines
+      if a.len > 0 and a[0].startsWith("unix:"): putEnv("DBUS_SESSION_BUS_ADDRESS", a[0])
+  except IOError, OSError: discard
+  try: removeFile(f) except OSError: discard
+
 proc startPrograms() =
   ## Program Manager first (when it is not open already), and what the
   ## programs need running (the sound, the GPU); the rest -- StartUp, the
@@ -223,6 +245,7 @@ proc startPrograms() =
   if findExe("pulseaudio").len > 0 and execShellCmd("pulseaudio --check >/dev/null 2>&1") != 0:
     launch("pulseaudio --start --exit-idle-time=-1")
   useGpu()
+  startScreenReaders()
   if conf.setting("startProgman", "on") != "off" and findWindow("Program Manager") == 0:
     launch(selfCommand("progman"))
   if not tookOver: playSound("start", conf)
@@ -423,6 +446,12 @@ proc drawIcons() =
     let row = i div perRow
     let r = rect(dp(4) + col * cw, ui.h - (row + 1) * ch, cw, ch)
     let hit = interact(idOf("icon:" & $c.win), r, focusable = false)
+    if accessible():
+      accessNode(arButton, c.title, id = idOf("icon:" & $c.win), r = r, help = "minimized")
+      if accessPressed == idOf("icon:" & $c.win):
+        iconSel = -1
+        wm.restore(c)
+        continue
     let picR = rect(r.x + (r.w - isz) div 2, r.y + dp(6), isz, isz)
     drawBitmap(picR, iconOf(c, isz))
     let label = ellipsize(c.title, r.w - dp(6))
