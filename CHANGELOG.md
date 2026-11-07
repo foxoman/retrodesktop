@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.10
+
+- **Write opens and saves Word documents (.docx)**: its headings, bold,
+  italic, underline, strike, colors, sizes, fonts, alignment, bullet and
+  numbered lists, links and line breaks go both ways; a table from Word
+  comes in as lines (its cells between bars). Arabic paragraphs keep right
+  to left in Word. A new document is saved as Document.docx at first; HTML
+  and plain text as before. Word, LibreOffice and Google Docs open them.
+- **The Hijri date**: Control Panel > Date/Time > "Show the Hijri date too"
+  puts it under the date in Clock and in Calendar's day (in Arabic in an
+  Arabic desktop); Adjust moves it a day or two where the month began
+  otherwise by the moon's sighting.
+- **The panel right to left** in Arabic: Programs at the right, the windows'
+  buttons from there (their icons at the right), the tray at the left; the
+  menus open at the right.
+- **Help in Arabic**: every topic, and the tour; Help's lists and tables
+  read right to left (Retro Nim UI 0.21.2).
+- `open` gives PDF Reader the PDFs, Picture Viewer the pictures and Media
+  Player the songs and videos, and Write the .docx.
+- Fix: a long window title in the panel in Arabic was cut inside a letter.
+- Needs Retro Nim UI 0.21.2.
+
 ## 0.1.9
 
 - **The keyboard's shortcuts**, Windows-style: the Windows key alone opens

@@ -40,7 +40,7 @@ the windows, the clock) and the Desktop folder's icons.
   maximizeNew, linuxLook, wakeLock, startProgman, panel, backKey, night,
   nightFrom, nightTo, nightScheme, language, feeds, vncPassword, layouts,
   layoutSwitch, repeatDelay, repeatRate, key.<action>, saverPassword (a
-  salted SHA-256), updateChecked); Program
+  salted SHA-256), updateChecked, hijri (on/off), hijriAdjust (-2..2)); Program
   Manager's items and windows in "retrodesktop-progman"; the desktop
   icons' places in "retrodesktop-icons".
 - The panel: `panel.nim`, an override-redirect window; the manager keeps it
@@ -54,7 +54,13 @@ the windows, the clock) and the Desktop folder's icons.
 - A program's failure: `crash.nim` (`watchCrashes(role)`, `retro-desktop
   crash ROLE`), kept in crashes.log.
 - Arabic: `ar.nim`'s `desktopArabic` with retroui's `toolkitArabic`
-  (`setUiLanguage`); the manager draws titles and menus through `tr`.
+  (`setUiLanguage`); the manager draws titles and menus through `tr`; the
+  panel is mirrored (`panel.nim`'s `mx`: laid out from the left, drawn from
+  the right; events turned back with `fromScreen`); Help shows
+  `helpar.nim`'s topics.
+- Write's Word documents: `docx.nim` (`readDocx`, `docxOf`); the Hijri
+  date: `hijri.nim` (`hijriText`, common.nim's `hijriLine` with the
+  settings).
 - Programs talk to the desktop with ClientMessages on the root window:
   `_RETRO_DESKTOP` (1 cascade, 2 tile, 3 arrange icons, 4 the look changed,
   5 exit, 6 ask to exit, 7 ping: the answer goes in the root's

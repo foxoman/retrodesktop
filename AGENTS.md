@@ -43,6 +43,13 @@ alike.
   - `updates.nim` -- a newer release on GitHub (a thread of its own)
   - `crash.nim` -- the General Protection Fault box: a signal or an
     uncaught error forks the box, which lets go of the X connection
+  - `docx.nim` -- Word documents (.docx) for Write: read into a RichDoc
+    (paragraphs, headings, lists, links, tables as lines) and written from
+    one (with `w:bidi` for Arabic paragraphs), through retroui/zip
+  - `hijri.nim` -- the Hijri date (the tabular calendar, with Control
+    Panel's adjust of -2 to 2 days), for Clock, Calendar and Date/Time
+  - `helpar.nim` -- Help's topics in Arabic, by the same names as
+    `help.nim`'s (a topic missing there shows in English)
   - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
     Cardfile), `control.nim`, `tasklist.nim`, `terminal.nim` -- the programs
   - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing

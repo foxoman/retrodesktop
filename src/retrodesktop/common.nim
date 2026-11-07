@@ -7,11 +7,11 @@
 import std/[os, strutils, tables, algorithm, math, times, hashes]
 import retroui
 import retroui/[svgimport, imaging, lang_ar, sha2]
-import ar
+import ar, hijri
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.9"
+  DesktopVersion* = "0.1.10"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -124,6 +124,13 @@ proc passwordIs*(kept, password: string): bool =
   ## Whether `password` is the one `kept` (from `newPasswordHash`).
   let k = kept.find(':')
   k > 0 and passwordHash(password, kept[0 ..< k]) == kept
+
+proc hijriLine*(t: DateTime; s: Settings): string =
+  ## The Hijri date of `t` when Control Panel > Date/Time shows it ("" not).
+  if s.setting("hijri", "off") != "on": return ""
+  var adjust = 0
+  try: adjust = clamp(parseInt(s.setting("hijriAdjust", "0")), -2, 2) except ValueError: discard
+  hijriText(t, adjust, s.setting("language", "en") == "ar")
 
 proc nightNow*(s: Settings): bool =
   ## Night colors are on, and it is night now (between the hours Control

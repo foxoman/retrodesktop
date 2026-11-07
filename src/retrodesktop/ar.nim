@@ -197,7 +197,7 @@ const desktopArabic* = [
   ("The desktop's color, pattern and wallpaper", "لون سطح المكتب ونقشه وخلفيته"),
   ("The font (one of yours too), the text size, the size of everything", "الخط (وخطوطك أيضًا)، وحجم النص، وحجم كل شيء"),
   ("Frames for fingers, the panel, windows that open maximized", "إطارات للأصابع، واللوحة، ونوافذ تُفتح مكبّرة"),
-  ("The clock's hours and the time zone", "ساعات الساعة والمنطقة الزمنية"),
+  ("The clock's hours, the time zone, the Hijri date", "ساعات الساعة والمنطقة الزمنية والتاريخ الهجري"),
   ("The sounds of the desktop's events", "أصوات أحداث سطح المكتب"),
   ("A screen saver, after a while with nothing done", "شاشة توقف بعد فترة دون نشاط"),
   ("The look GTK, Qt and other programs are given", "المظهر الذي تأخذه برامج GTK وQt وغيرها"),
@@ -293,4 +293,56 @@ const desktopArabic* = [
   ("The layouts (English, Arabic...), the shortcuts, how keys repeat", "التخطيطات (الإنجليزية، العربية...)، والاختصارات، وتكرار المفاتيح"),
   ("What the desktop's programs need, and whether it is here", "ما تحتاجه برامج سطح المكتب، وهل هو موجود"),
   ("The settings in one file, and back", "الإعدادات في ملف واحد، واستعادتها"),
+  ("Show the Hijri date too (Clock, Calendar)", "أظهر التاريخ الهجري أيضًا (الساعة، التقويم)"),
+  ("Adjust:", "التعديل:"),
+  ("Documents (*.docx;*.html;*.htm;*.txt)", "المستندات (*.docx;*.html;*.htm;*.txt)"),
+  ("Word Documents (*.docx)", "مستندات Word (*.docx)"),
+  ("Web Pages (*.html;*.htm)", "صفحات الويب (*.html;*.htm)"),
+  ("Web Pages (*.html)", "صفحات الويب (*.html)"),
+  ("Text Files (*.txt)", "الملفات النصية (*.txt)"),
+  ("All Files (*.*)", "كل الملفات (*.*)"),
+  ("The date and the time are Android's (or the computer's): Settings > System > Date & time sets them. The time zone here is for the desktop's programs (TZ); empty: the system's own. The Hijri date is counted (the tabular calendar); Adjust moves it a day or two where the month began otherwise by the moon's sighting.",
+   "التاريخ والوقت من أندرويد (أو من الحاسوب): تضبطهما الإعدادات > النظام > التاريخ والوقت. المنطقة الزمنية هنا لبرامج سطح المكتب (TZ)؛ وإن تُركت فارغة فهي منطقة النظام. التاريخ الهجري محسوب (التقويم الجدولي)؛ والتعديل يقدّمه أو يؤخّره يومًا أو يومين حيث بدأ الشهر بغير ذلك برؤية الهلال."),
+  # (the tour, and Help's buttons)
+  ("Welcome", "مرحبًا"),
+  ("This is Retro Desktop: Windows 3.1's look for your phone, tablet or " &
+   "computer, with every Linux program in a window of its own. This tour takes a minute.",
+   "هذا سطح المكتب الكلاسيكي: مظهر ويندوز 3.1 لهاتفك أو جهازك اللوحي أو حاسوبك، وكل " &
+   "برنامج لينكس في نافذة خاصة به. تستغرق هذه الجولة دقيقة."),
+  ("Each program has a window: move it by its title bar, size it by its " &
+   "border, minimize it to an icon or maximize it with the buttons. On a touch screen, " &
+   "hold a finger on a title bar for its menu.",
+   "لكل برنامج نافذة: انقلها من شريط عنوانها، وغيّر حجمها من حدّها، وصغّرها إلى أيقونة " &
+   "أو كبّرها بالأزرار. وعلى شاشة اللمس أبقِ إصبعك على شريط العنوان لتظهر قائمتها."),
+  ("Your programs are in Program Manager's groups. Setup, in Main, " &
+   "installs more -- browsers, office, development, games -- from Termux's packages.",
+   "برامجك في مجموعات مدير البرامج. والتثبيت، في الرئيسية، يثبّت المزيد -- المتصفحات " &
+   "والمكتب والبرمجة والألعاب -- من حزم Termux."),
+  ("The desktop's menu", "قائمة سطح المكتب"),
+  ("A right click on the desktop -- or a finger held on it -- " &
+   "opens its menu: the Task List, Control Panel, the Terminal, Run, Cascade, Tile.",
+   "النقر بالزر الأيمن على سطح المكتب -- أو إبقاء الإصبع عليه -- يفتح قائمته: قائمة " &
+   "المهام، لوحة التحكم، الطرفية، تشغيل، تتالي، تجانب."),
+  ("Switching", "التبديل"),
+  ("Alt+Tab shows the next window while Alt is held; Ctrl+Esc lists them " &
+   "all with the memory each takes. The keyboard bar of Termux:X11 has Alt, Ctrl and Esc.",
+   "Alt+Tab يُظهر النافذة التالية ما دام Alt مضغوطًا؛ وCtrl+Esc يعرضها كلها مع الذاكرة " &
+   "التي تأخذها كل واحدة. وفي شريط مفاتيح Termux:X11 توجد Alt وCtrl وEsc."),
+  ("Help is near", "التعليمات قريبة"),
+  ("F1 in any program opens its Help. Control Panel changes the colors, " &
+   "the wallpaper, the sizes and the sounds. Android Files, in Main, shows your phone's files.",
+   "F1 في أي برنامج يفتح تعليماته. ولوحة التحكم تغيّر الألوان والخلفية والأحجام " &
+   "والأصوات. وملفات أندرويد، في الرئيسية، تُظهر ملفات هاتفك."),
+  ("A window", "نافذة"),
+  ("Drag the title bar to move it", "اسحب شريط العنوان لنقلها"),
+  ("Its border or a corner sizes it", "حدّها أو زاويتها يغيّر حجمها"),
+  ("Minimize, maximize", "تصغير، تكبير"),
+  ("Double click (tap) a program to start it", "انقر نقرًا مزدوجًا (أو المس) برنامجًا لتشغيله"),
+  ("Setup installs more programs", "التثبيت يضيف برامج أخرى"),
+  ("Right click (hold a finger) on the desktop", "انقر بالزر الأيمن (أو أبقِ إصبعك) على سطح المكتب"),
+  ("Hold Alt, press Tab: the next window", "أبقِ Alt واضغط Tab: النافذة التالية"),
+  ("F1 in any program: its Help", "F1 في أي برنامج: تعليماته"),
+  ("of", "من"),
+  ("Done", "تم"),
+  ("Back", "رجوع"),
 ]

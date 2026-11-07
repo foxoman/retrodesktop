@@ -94,7 +94,14 @@ proc runClock*() =
     if showDate:
       let d = t.format("dddd, d MMMM yyyy")
       let lh = lineHeight()
-      text(r.x + (r.w - textWidth(d)) div 2, r.y + r.h - lh - dp(4), d, ui.theme.text)
+      let hd = hijriLine(t, desktopSettings())
+      var y = r.y + r.h - lh - dp(4)
+      if hd.len > 0:
+        # (the Hijri date under it, when Control Panel shows it)
+        text(r.x + (r.w - textWidth(hd)) div 2, y, hd, ui.theme.text)
+        y -= lh
+        face.h -= lh
+      text(r.x + (r.w - textWidth(d)) div 2, y, d, ui.theme.text)
       face.h -= lh + dp(6)
     if analog: drawAnalog(face, t) else: drawDigital(face, t)
     setTitle(if r.w < dp(150): t.format(if h24: "HH:mm" else: "h:mm tt") else: "Clock")
@@ -332,6 +339,8 @@ const DayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 
 proc dayView() =
   label(DayNames[weekday(calDay)] & ", " & $calDay, bold = true)
+  let hd = hijriLine(dateTime(calDay.year, Month(calDay.month), MonthdayRange(calDay.day)), desktopSettings())
+  if hd.len > 0: label(hd, enabled = false)
   scrollPanel(-1):
     form(50):
       for h in 6 .. 22:

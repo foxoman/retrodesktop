@@ -6,7 +6,7 @@
 
 import std/[os, strutils]
 import retroui
-import common, link, art
+import common, link, art, helpar
 
 const Topics* = [
   ("contents", "Contents", """
@@ -143,8 +143,11 @@ install it with [Setup](topic:setup). [Contents](topic:contents)
 
 Documents with **bold**, *italic*, underline, sizes, colors, lists and
 alignment: the Character and Paragraph menus, the tool bar, or Ctrl+B, I, U.
-Documents are kept as HTML (a browser, LibreOffice or AbiWord opens them) or
-as plain text (.txt). Ctrl+Z undoes. [Contents](topic:contents)
+Documents are kept as **Word documents** (.docx: Word, LibreOffice and Google
+Docs open them), as HTML (a browser opens them) or as plain text (.txt); Write
+opens all three, and a .docx from anywhere: its headings, lists, links and
+tables come in (a table as lines, its cells between bars). Arabic paragraphs
+stay right to left in Word. Ctrl+Z undoes. [Contents](topic:contents)
 """),
   ("clipboard", "Clipboard Viewer", """
 # Clipboard Viewer
@@ -159,7 +162,8 @@ sends it out. [Contents](topic:contents)
 
 The time, on a face or in numbers (Settings), with the seconds and the date.
 Made small, it shows the time in its title. Control Panel's Date/Time
-chooses 12 or 24 hours and the time zone. [Contents](topic:contents)
+chooses 12 or 24 hours and the time zone, and shows the **Hijri date** under
+the other. [Contents](topic:contents)
 """),
   ("calc", "Calculator", """
 # Calculator
@@ -172,7 +176,8 @@ out. [Contents](topic:contents)
 # Calendar
 
 The month, the days with appointments and notes. Click a day to see it and
-write in it; Show goes to today or another date. [Contents](topic:contents)
+write in it; Show goes to today or another date. With the Hijri date on
+(Control Panel > Date/Time), the day shows it too. [Contents](topic:contents)
 """),
   ("cardfile", "Cardfile", """
 # Cardfile
@@ -201,14 +206,16 @@ answer; Cascade and Tile arrange the windows. [Contents](topic:contents)
   open maximized, programs paused while minimized (no CPU, no battery), and
   in Termux whether Android's Back key closes the window in front (off at
   first: Termux:X11 uses Back for its keyboard).
-* **Date/Time**: 12 or 24 hours, the time zone.
+* **Date/Time**: 12 or 24 hours, the time zone, and the **Hijri date** beside
+  the other (Clock, Calendar); Adjust moves it a day or two, where the month
+  began otherwise by the moon's sighting.
 * **Sound**: which chime goes with which event.
 * **Screen Saver**: after a delay with nothing done; **Password protected**
   asks for a password before it ends (Win+L starts it now).
 * **Linux Programs**: the look given to other programs; 3D through
   Android's GPU (VirGL).
 * **International**: the desktop's programs in English or in Arabic (right
-  to left).
+  to left: the panel, the menus and Help too).
 * **Keyboard**: the layouts and the key that switches them, the shortcuts,
   how fast a held key repeats: [the keyboard](topic:keyboard).
 * **System Check**: what the desktop's programs need -- Termux:API, the
@@ -294,8 +301,9 @@ A bar along the bottom of the screen -- 3.1 had none: it came with Windows
   **Wi-Fi**, the **notifications** (a bell; a click lists the last ones), the
   battery and the clock (a click opens Clock).
 
-Control Panel > Windows turns it off: the windows minimized are icons at the
-bottom of the desktop again, as in 3.1. [Contents](topic:contents)
+In Arabic it turns right to left: Programs at the right, the tray at the
+left. Control Panel > Windows turns it off: the windows minimized are icons at
+the bottom of the desktop again, as in 3.1. [Contents](topic:contents)
 """),
   ("icons", "Icons on the desktop", """
 # Icons on the desktop
@@ -443,8 +451,19 @@ one made here.
 [Contents](topic:contents)
 """)]
 
-proc topicIndex(name: string): int =
-  for i, t in Topics:
+proc shownTopics(): seq[(string, string, string)] =
+  ## The topics in the interface's language (Arabic: each one there is, the
+  ## others in English).
+  let arabic = desktopSettings().setting("language", "en") == "ar"
+  for t in Topics:
+    var shown = t
+    if arabic:
+      for a in TopicsAr:
+        if a[0] == t[0]: shown = a
+    result.add shown
+
+proc topicIndex(topics: seq[(string, string, string)]; name: string): int =
+  for i, t in topics:
     if t[0] == name: return i
   0
 
@@ -461,16 +480,17 @@ proc runHelp*(topic: string) =
   openApp("Help", scaled(560), scaled(460), frame = wfSystem, userFrame = false, id = "help")
   showArt("help")
   followLook()
-  var at = topicIndex(topic)
+  let topics = shownTopics()
+  var at = topicIndex(topics, topic)
   var back: seq[int]
   while beginFrame():
-    let wanted = "Help - " & Topics[at][1]
+    let wanted = tr("Help") & " - " & topics[at][1]
     if ui.title != wanted: setTitle(wanted)
     menubar:
       menu "&File":
         if menuItem("E&xit"): quitApp()
       menu "&Topics":
-        for i, t in Topics:
+        for i, t in topics:
           withId(i):
             if menuItem(t[1], checked = i == at):
               back.add at
@@ -481,10 +501,10 @@ proc runHelp*(topic: string) =
         at = 0
       if button("&Back", enabled = back.len > 0): at = back.pop()
       spring()
-    let ev = markdownView(Topics[at][2], key = Topics[at][0])
+    let ev = markdownView(topics[at][2], key = topics[at][0])
     if ev.link.startsWith("topic:"):
       back.add at
-      at = topicIndex(ev.link[6 .. ^1])
+      at = topicIndex(topics, ev.link[6 .. ^1])
     elif ev.link.len > 0: launch(selfCommand("open") & " " & quoteShell(ev.link))
     if ui.key == KeyEsc: quitApp()
     endFrame()
@@ -493,7 +513,8 @@ proc runHelp*(topic: string) =
 
 # ---- the tour ---------------------------------------------------------------------------------------
 
-proc miniWindow(r: Rect; title: string; active = true) =
+proc miniWindow(r: Rect; named: string; active = true) =
+  let title = tr(named)
   fill(r, color(255, 255, 255))
   box(r, color(0, 0, 0))
   let bar = rect(r.x + 1, r.y + 1, r.w - 2, lineHeight() + dp(4))
@@ -508,7 +529,8 @@ proc miniWindow(r: Rect; title: string; active = true) =
   box(rect(bar.x + bar.w - 2 * s, bar.y, s, s), color(0, 0, 0))
   box(rect(bar.x + bar.w - s, bar.y, s, s), color(0, 0, 0))
 
-proc callout(x, y: int; s: string) =
+proc callout(x, y: int; said: string) =
+  let s = tr(said)
   let w = textWidth(s) + dp(10)
   let r = rect(x, y, w, lineHeight() + dp(6))
   fill(r, color(255, 255, 225))
@@ -544,7 +566,7 @@ proc tourPicture(page: int; r: Rect) =
     box(m, color(0, 0, 0))
     var y = m.y + dp(4)
     for it in ["Program Manager", "Task List...", "Control Panel", "Terminal", "Run...", "Cascade", "Tile"]:
-      text(m.x + dp(10), y, it, color(0, 0, 0))
+      text(m.x + dp(10), y, tr(it), color(0, 0, 0))
       y += lineHeight() + dp(4)
     callout(r.x + dp(8), r.y + r.h - lineHeight() - dp(14), "Right click (hold a finger) on the desktop")
   of 4:
@@ -552,7 +574,7 @@ proc tourPicture(page: int; r: Rect) =
     fill(b, color(192, 192, 192))
     box(b, color(0, 0, 0), 2)
     drawBitmap(rect(b.x + dp(12), b.y + (b.h - s) div 2, s, s), appIcon("terminal", px))
-    text(b.x + dp(56), b.y + (b.h - lineHeight()) div 2, "Terminal", color(0, 0, 0), true)
+    text(b.x + dp(56), b.y + (b.h - lineHeight()) div 2, tr("Terminal"), color(0, 0, 0), true)
     callout(b.x, b.y - lineHeight() - dp(16), "Hold Alt, press Tab: the next window")
   else:
     var x = r.x + dp(20)
@@ -590,7 +612,7 @@ proc runTour*() =
     label(TourPages[page][0], bold = true)
     paragraph TourPages[page][1]
     row:
-      label($(page + 1) & " of " & $TourPages.len, enabled = false)
+      label($(page + 1) & " " & tr("of") & " " & $TourPages.len, enabled = false, literal = true)
       spring()
       if button("< &Back", enabled = page > 0): dec page
       if page < TourPages.high:

@@ -1,13 +1,15 @@
 ## Write: the word processor 3.1 came with, made again on Retro Nim UI's rich
 ## text editor -- bold, italic, underline, sizes, colors, lists, alignment,
-## undo -- saving documents as HTML (any browser, LibreOffice or AbiWord opens
-## them) or as plain text.
+## undo -- opening and saving Word documents (.docx: Word, LibreOffice and
+## Google Docs open them; Arabic paragraphs right to left), HTML (any
+## browser) or plain text; printing to PDF.
 ##
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
 import std/[os, strutils]
 import retroui
 import retroui/[richedit, report]
+import docx
 import common, link, help
 
 var
@@ -25,9 +27,10 @@ proc docName(): string = (if path.len > 0: path.extractFilename else: "(Untitled
 
 proc load(p: string) =
   try:
-    let text = readFile(p)
     let ext = p.splitFile.ext.toLowerAscii
-    doc = if ext in [".html", ".htm", ".xhtml"]: richFromHtml(text) else: richDoc(text)
+    doc = if ext == ".docx": readDocx(p)
+          elif ext in [".html", ".htm", ".xhtml"]: richFromHtml(readFile(p))
+          else: richDoc(readFile(p))
     path = p
     saved = true
   except CatchableError as e:
@@ -37,7 +40,9 @@ proc load(p: string) =
 proc store(p: string): bool =
   try:
     let ext = p.splitFile.ext.toLowerAscii
-    if ext in [".html", ".htm", ".xhtml"]:
+    if ext == ".docx":
+      writeFile(p, docxOf(doc, p.splitFile.name))
+    elif ext in [".html", ".htm", ".xhtml"]:
       writeFile(p, "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" &
                 p.splitFile.name & "</title></head>\n<body>\n" & toHtml(doc) & "\n</body></html>\n")
     else:
@@ -52,7 +57,7 @@ proc store(p: string): bool =
 
 proc save(): bool =
   if path.len == 0:
-    pickPath = getHomeDir() / "Document.html"
+    pickPath = getHomeDir() / "Document.docx"
     showSave = true
     false
   else: store(path)
@@ -97,7 +102,7 @@ proc runWrite*(args: seq[string]) =
         if menuItem("&Open...", "Ctrl+O"): ask("open")
         if menuItem("&Save", "Ctrl+S"): discard save()
         if menuItem("Save &As..."):
-          pickPath = (if path.len > 0: path else: getHomeDir() / "Document.html")
+          pickPath = (if path.len > 0: path else: getHomeDir() / "Document.docx")
           showSave = true
         menuSeparator()
         if menuItem("&Print to PDF...", "Ctrl+P"):
@@ -140,13 +145,13 @@ proc runWrite*(args: seq[string]) =
     richToolbar(doc)
     if richEdit(doc, placeholder = "Write here"): saved = false
     # the dialogs
-    if fileDialog(showOpen, pickPath, fmOpen, ["Write Documents (*.html;*.htm)", "Text Files (*.txt)",
-                  "All Files (*.*)"]):
+    if fileDialog(showOpen, pickPath, fmOpen, ["Documents (*.docx;*.html;*.htm;*.txt)",
+                  "Word Documents (*.docx)", "Web Pages (*.html;*.htm)", "Text Files (*.txt)", "All Files (*.*)"]):
       load(pickPath)
-    if fileDialog(showSave, pickPath, fmSave, ["Write Documents (*.html)", "Text Files (*.txt)"],
-                  title = "Save As"):
+    if fileDialog(showSave, pickPath, fmSave, ["Word Documents (*.docx)", "Web Pages (*.html)",
+                  "Text Files (*.txt)"], title = "Save As"):
       var p = pickPath
-      if p.splitFile.ext.len == 0: p &= ".html"
+      if p.splitFile.ext.len == 0: p &= ".docx"
       if store(p) and then.len > 0: carryOn()
     if fileDialog(showPdf, pdfPath, fmSave, ["PDF Documents (*.pdf)"], title = "Print to PDF"):
       # (the document as pages: its HTML laid out by Retro Nim UI's reports)

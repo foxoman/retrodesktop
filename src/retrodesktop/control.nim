@@ -8,7 +8,7 @@
 
 import std/[os, strutils, math, times, algorithm]
 import retroui
-import common, link, art, sounds, help, keyboard, syscheck
+import common, link, art, sounds, help, keyboard, syscheck, hijri
 
 type Applet = enum
   apColor = "Color", apDesktop = "Desktop", apFonts = "Fonts", apWindows = "Windows",
@@ -63,6 +63,8 @@ var
   newFont = ""
   language = 0
   saverLocked = false
+  hijriOn = false
+  hijriAdjust = 0
   saverPassword = ""
   showPassword = false
   pwOld, pwNew, pwAgain, pwSaid: string
@@ -132,6 +134,8 @@ proc readAll() =
   language = max(0, Languages.find(conf.setting("language", "en")))
   saverPassword = conf.setting("saverPassword", "")
   saverLocked = saverPassword.len > 0
+  hijriOn = conf.setting("hijri", "off") == "on"
+  try: hijriAdjust = clamp(parseInt(conf.setting("hijriAdjust", "0")), -2, 2) except ValueError: hijriAdjust = 0
   let lays = layoutsOf(conf)
   layoutOn = @[]
   for (k, _, _) in Layouts: layoutOn.add k in lays
@@ -186,6 +190,8 @@ proc saveAll() =
   conf["backKey"] = (if backKey: "on" else: "off")
   conf["language"] = Languages[clamp(language, 0, Languages.high)]
   conf["saverPassword"] = (if saverLocked: saverPassword else: "")
+  conf["hijri"] = (if hijriOn: "on" else: "off")
+  conf["hijriAdjust"] = $hijriAdjust
   var lays: seq[string]
   for i, (k, _, _) in Layouts:
     if i < layoutOn.len and layoutOn[i]: lays.add k
@@ -400,9 +406,16 @@ proc dateTimeDialog() =
           radio("&12 hours", k, 1)
           clock24 = k == 0
       field "Time &zone:": comboEdit(timeZone, Zones, w = dp(220))
+      field "":
+        checkbox("Show the &Hijri date too (Clock, Calendar)", hijriOn)
+      field "&Adjust:":
+        row([-1, 150]):
+          slider(hijriAdjust, -2, 2, ticks = 5, enabled = hijriOn)
+          label(if hijriOn: hijriText(t, hijriAdjust, language == 1) else: "", literal = true)
     paragraph "The date and the time are Android's (or the computer's): Settings > " &
       "System > Date & time sets them. The time zone here is for the desktop's programs " &
-      "(TZ); empty: the system's own."
+      "(TZ); empty: the system's own. The Hijri date is counted (the tabular calendar); " &
+      "Adjust moves it a day or two where the month began otherwise by the moon's sighting."
     wakeIn(1000)
     if okCancel(): saveAll()
 
@@ -739,7 +752,7 @@ proc runControl*() =
                  of apDesktop: "The desktop's color, pattern and wallpaper"
                  of apFonts: "The font (one of yours too), the text size, the size of everything"
                  of apWindows: "Frames for fingers, the panel, windows that open maximized"
-                 of apDateTime: "The clock's hours and the time zone"
+                 of apDateTime: "The clock's hours, the time zone, the Hijri date"
                  of apSound: "The sounds of the desktop's events"
                  of apSaver: "A screen saver, after a while with nothing done"
                  of apPrograms: "The look GTK, Qt and other programs are given"

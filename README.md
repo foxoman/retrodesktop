@@ -62,8 +62,9 @@ one program of about 5 MB, nothing to set up.
   bar, the desktop's colors, scroll bars always there -- on a profile of
   its own, so your own Firefox stays as it is (`pkg install firefox`).
 - **The accessories:** Write (a word processor: bold, italic, sizes,
-  colors, lists; HTML or plain text), Clock, Calculator, Calendar (with
-  appointments and notes), Cardfile, Clipboard Viewer (and Android's
+  colors, lists; Word documents (.docx) opened and saved, HTML or plain
+  text), Clock, Calculator, Calendar (with appointments and notes; the
+  Hijri date beside the other, Control Panel > Date/Time), Cardfile, Clipboard Viewer (and Android's
   clipboard, with Termux:API), Task List (Ctrl+Esc: every window and the
   memory its program takes; End Task ends one that hangs), Control Panel
   (with Date/Time and the screen savers: Blank Screen, Starfield, Mystify,
@@ -108,8 +109,8 @@ one program of about 5 MB, nothing to set up.
   ![Communicator](docs/communicator.png)
 
 - **English or Arabic:** Control Panel > International puts the desktop's
-  programs, its menus, the panel and the frames' titles in Arabic, right to
-  left.
+  programs, its menus, the frames' titles and Help in Arabic, right to
+  left -- the panel too: Programs at the right, the tray at the left.
 - **The same look for the other programs.** GTK programs (and Chromium,
   Electron, Firefox) get the color scheme as a "Retro31" GTK theme with
   3.1 scroll bars (always there, with arrows), the 3.1 cursors at the
@@ -163,7 +164,7 @@ one program of about 5 MB, nothing to set up.
    ```sh
    pkg install x11-repo
    pkg install termux-x11-nightly libx11
-   apt install ./retro-desktop_0.1.9_aarch64.deb     # the .deb from the releases
+   apt install ./retro-desktop_0.1.10_aarch64.deb     # the .deb from the releases
    retro-desktop
    ```
 
@@ -291,7 +292,7 @@ clones it.
 
 GitHub builds the package on every push and pull request
 (`.github/workflows/deb.yml`), and puts it on the release when a version
-tag is pushed (`git tag v0.1.9 && git push origin v0.1.9`).
+tag is pushed (`git tag v0.1.10 && git push origin v0.1.10`).
 
 ## How it works
 

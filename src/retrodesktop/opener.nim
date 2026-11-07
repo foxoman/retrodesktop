@@ -111,8 +111,14 @@ proc ownHandlers(kind, target: string): seq[Handler] =
   if kind == "x-scheme-handler/http" or kind == "text/html":
     if firefoxPath().len > 0:
       result.add Handler(name: "Retro Browser", exec: selfCommand("browser") & " " & q)
-  if kind == "text/html" or kind == "text/plain":
+  if kind in ["text/html", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
     result.add Handler(name: "Write", exec: selfCommand("write") & " " & q)
+  if kind == "application/pdf":
+    result.add Handler(name: "PDF Reader", exec: selfCommand("pdf") & " " & q)
+  if kind.startsWith("image/"):
+    result.add Handler(name: "Picture Viewer", exec: selfCommand("pictures") & " " & q)
+  if kind.startsWith("audio/") or kind.startsWith("video/"):
+    result.add Handler(name: "Media Player", exec: selfCommand("media") & " " & q)
   if kind.startsWith("text/") or kind in ["application/json", "application/xml", "application/x-shellscript"]:
     let n = companion("retro-notepad")
     if n.len > 0: result.add Handler(name: "Notepad", exec: quoteShell(n) & " " & q)

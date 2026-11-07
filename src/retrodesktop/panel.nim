@@ -16,6 +16,7 @@
 ## Developed by Sultan Al Isaiee @foxoman -- www.foxoman.net -- sultan@foxoman.net
 
 import std/[os, osproc, strutils, json, times, math, streams, tables]
+from std/unicode import toRunes, `$`
 import retroui
 import retroui/canvas2d
 import xlib, common, wm, art, catalog, keyboard, tasks
@@ -152,6 +153,17 @@ proc groupArt(name: string): string =
 
 proc panelHeight*(): int = tbh() + dpx(10)
 
+proc mirrored(): bool = ui.rtl
+  ## (right to left -- Arabic: Programs at the right, the tray at the left)
+
+proc mx(x, w: int): int =
+  ## Where a thing laid out from the left at `x`, `w` wide, is drawn.
+  if mirrored(): screenSize()[0] - x - w else: x
+
+proc fromScreen(x: int): int =
+  ## An event's x, as the layout counts it (from the left).
+  if mirrored(): screenSize()[0] - 1 - x else: x
+
 proc readBattery() =
   ## The battery's charge: the computer's own (/sys), else Termux:API's
   ## (in the background: it takes a moment).
@@ -207,11 +219,19 @@ proc drawPanel*() =
   let isz = bh - dpx(6)
   let label = tr("Programs")
   startW = isz + dpx(14) + int(cv.measureText(label).width)
-  bevelBox(pad, pad + 1, startW, bh, pressedOn == -1)
+  let sx = mx(pad, startW)
+  bevelBox(sx, pad + 1, startW, bh, pressedOn == -1)
   let logo = appIcon("logo", isz)
-  if logo != nil: cv.drawImage(logo, float(pad + dpx(4)), float(pad + 1 + (bh - isz) div 2))
-  cv.fillStyle = t.text
-  cv.fillText(label, float(pad + isz + dpx(9)), float(pad + 1 + bh div 2))
+  if mirrored():
+    if logo != nil: cv.drawImage(logo, float(sx + startW - isz - dpx(4)), float(pad + 1 + (bh - isz) div 2))
+    cv.fillStyle = t.text
+    cv.textAlign = "right"
+    cv.fillText(label, float(sx + startW - isz - dpx(9)), float(pad + 1 + bh div 2))
+    cv.textAlign = "left"
+  else:
+    if logo != nil: cv.drawImage(logo, float(sx + dpx(4)), float(pad + 1 + (bh - isz) div 2))
+    cv.fillStyle = t.text
+    cv.fillText(label, float(sx + isz + dpx(9)), float(pad + 1 + bh div 2))
   # the tray, sunken: the layout, the volume, Wi-Fi, the notifications,
   # the battery, the clock (what is not known is left out)
   cv.font = $px & "px sans-serif"
@@ -231,15 +251,17 @@ proc drawPanel*() =
   trayX = sw - pad - trayW
   tray = @[]
   if items.len > 0:
+    let tx0 = mx(trayX, trayW)
     cv.fillStyle = t.shadow
-    cv.fillRect(float(trayX), float(pad + 1), float(trayW), 1)
-    cv.fillRect(float(trayX), float(pad + 1), 1, float(bh))
+    cv.fillRect(float(tx0), float(pad + 1), float(trayW), 1)
+    cv.fillRect(float(tx0), float(pad + 1), 1, float(bh))
     cv.fillStyle = t.light
-    cv.fillRect(float(trayX), float(pad + bh), float(trayW), 1)
-    cv.fillRect(float(trayX + trayW - 1), float(pad + 1), 1, float(bh))
-    var x = trayX + dpx(8)
+    cv.fillRect(float(tx0), float(pad + bh), float(trayW), 1)
+    cv.fillRect(float(tx0 + trayW - 1), float(pad + 1), 1, float(bh))
+    var lx = trayX + dpx(8)
     let gy = float(pad + 1 + (bh - g) div 2)
     for it in items:
+      let x = mx(lx, it.w)
       cv.fillStyle = t.text
       cv.strokeStyle = t.text
       case it.kind
@@ -301,8 +323,8 @@ proc drawPanel*() =
         cv.fillText((if charging: "+" else: "") & battery, float(x), mid)
       of tkClock:
         cv.fillText(n.format(if h24: "HH:mm" else: "h:mm tt"), float(x), mid)
-      tray.add (it.kind, x - dpx(4), it.w + dpx(8))
-      x += it.w + dpx(8)
+      tray.add (it.kind, lx - dpx(4), it.w + dpx(8))
+      lx += it.w + dpx(8)
   # the windows: a button each, in the order they were opened
   buttons = @[]
   var list: seq[Client]
@@ -312,27 +334,38 @@ proc drawPanel*() =
   let room = trayX - dpx(6) - x0
   if list.len > 0 and room > dpx(30):
     let w = min(dpx(170), room div list.len)
-    var x = x0
+    var lx = x0
     cv.font = $px & "px sans-serif"
     for c in list:
       let down = (c == active and not c.iconic) or pressedOn == buttons.len
+      let x = mx(lx, w - dpx(3))
       bevelBox(x, pad + 1, w - dpx(3), bh, down)
       let ic = c.readIcon(isz)
-      var tx = x + dpx(6)
-      if ic != nil and w > isz + dpx(20):
-        cv.drawImage(ic, float(tx), float(pad + 1 + (bh - isz) div 2), float(isz), float(isz))
-        tx += isz + dpx(5)
+      let bw = w - dpx(3)
+      let withIcon = ic != nil and w > isz + dpx(20)
+      # (right to left: the icon at the right, the title from it leftwards)
+      let iconX = if mirrored(): x + bw - dpx(6) - isz else: x + dpx(6)
+      if withIcon:
+        cv.drawImage(ic, float(iconX), float(pad + 1 + (bh - isz) div 2), float(isz), float(isz))
+      let room = bw - dpx(11) - (if withIcon: isz + dpx(5) else: 0)
       var title = tr(c.title)
-      let maxW = float(x + w - dpx(8) - tx)
-      while title.len > 1 and cv.measureText(title).width > maxW:
-        title = title[0 ..< title.len - 2] & "…"
-        if title.len <= 2: break
       cv.font = (if c == active and not c.iconic: "bold " else: "") & $px & "px sans-serif"
+      if cv.measureText(title).width > float(room):
+        # (cut by letters, never inside one: Arabic's are two bytes)
+        var r = title.toRunes
+        while r.len > 1 and cv.measureText($r & "…").width > float(room): r.setLen(r.len - 1)
+        title = $r & "…"
       cv.fillStyle = t.text
-      cv.fillText(title, float(tx), float(pad + 1 + bh div 2 + (if down: 1 else: 0)))
+      let ty = float(pad + 1 + bh div 2 + (if down: 1 else: 0))
+      if mirrored():
+        cv.textAlign = "right"
+        cv.fillText(title, float(x + bw - dpx(6) - (if withIcon: isz + dpx(5) else: 0)), ty)
+        cv.textAlign = "left"
+      else:
+        cv.fillText(title, float(x + dpx(6) + (if withIcon: isz + dpx(5) else: 0)), ty)
       cv.font = $px & "px sans-serif"
-      buttons.add (c, x, w - dpx(3))
-      x += w
+      buttons.add (c, lx, w - dpx(3))
+      lx += w
   putBitmap(panelWin, cv.toBitmap, 0, 0)
 
 proc programsMenu*()
@@ -350,14 +383,14 @@ proc openGroup(name: string; items: seq[CatItem]): proc () =
 
 proc groupMenu(name: string; items: seq[CatItem]) =
   let (_, sh) = screenSize()
-  var list = @[menuItem((if ui.rtl: tr("Programs") & " >" else: "< " & tr("Programs")), "", true,
+  var list = @[menuItem((if ui.rtl: "> " & tr("Programs") else: "< " & tr("Programs")), "", true,
                         proc () = programsMenu(), pic("progman")), menuLine()]
   for it in items:
     let cmd = if it.terminal: terminalCommand() & " -e " & it.command else: it.command
     let helpCall = it.command == "?help"
     list.add menuItem(it.name.replace("&", "&&"), "", true, startItem(cmd, helpCall),
                       pic(it.art, it.icon))
-  showMenu(list, dpx(3), sh - panelHeight(), above = true)
+  showMenu(list, (if mirrored(): screenSize()[0] else: dpx(3)), sh - panelHeight(), above = true)
 
 proc programsMenu*() =
   ## The Programs button's menu: the groups (each its programs), and the
@@ -377,7 +410,7 @@ proc programsMenu*() =
     if taskList != nil: taskList()), pic("tasklist"))
   list.add menuLine()
   list.add menuItem("E&xit Retro Desktop...", "", true, proc () = launch(selfCommand("exit")), pic("exit"))
-  showMenu(list, dpx(3), sh - panelHeight(), above = true)
+  showMenu(list, (if mirrored(): screenSize()[0] else: dpx(3)), sh - panelHeight(), above = true)
 
 proc buttonAt(x: int): int =
   ## -1 the Programs button, a window's button, -2 none.
@@ -387,8 +420,9 @@ proc buttonAt(x: int): int =
   -2
 
 proc trayMenu(list: seq[MenuItem]; x: int) =
-  let (_, sh) = screenSize()
-  showMenu(list, x, sh - panelHeight(), above = true)
+  let (sw, sh) = screenSize()
+  # (right to left: from the item's right edge; the menu stays on the screen)
+  showMenu(list, (if mirrored(): max(0, sw - x - dpx(200)) else: x), sh - panelHeight(), above = true)
 
 proc volumeItem(label: string; cmd: string): MenuItem =
   menuItem(label, "", true, proc () = setVolume(cmd))
@@ -454,12 +488,12 @@ proc panelEvents(p: pointer): bool {.nimcall.} =
   of ButtonPress:
     if e.xbutton.window != panelWin: return false
     closeMenu()
-    pressedOn = buttonAt(int(e.xbutton.x))
+    pressedOn = buttonAt(fromScreen(int(e.xbutton.x)))
     drawPanel()
     true
   of ButtonRelease:
     if e.xbutton.window != panelWin: return false
-    let at = buttonAt(int(e.xbutton.x))
+    let at = buttonAt(fromScreen(int(e.xbutton.x)))
     let was = pressedOn
     pressedOn = -2
     if at == was:
@@ -470,8 +504,8 @@ proc panelEvents(p: pointer): bool {.nimcall.} =
           if e.xbutton.button == 3: openMenu(c, int(e.xbutton.xRoot), int(e.xbutton.yRoot) - dpx(4))
           elif c == active and not c.iconic: minimize(c)
           else: restore(c)
-      elif int(e.xbutton.x) >= trayX:
-        trayClick(int(e.xbutton.x), int(e.xbutton.button))
+      elif fromScreen(int(e.xbutton.x)) >= trayX:
+        trayClick(fromScreen(int(e.xbutton.x)), int(e.xbutton.button))
     drawPanel()
     true
   else: false
