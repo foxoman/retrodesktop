@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.15
+
+- **Windows 95's title bar buttons** on every window: minimize, maximize
+  (restore) and close at the right of the title bar, the close button a
+  little apart so a slip off maximize doesn't close. The close button asks
+  the program to close, as Alt+F4 and the control menu's Close do (it can
+  still ask to save); a program's dialogs have it too. The layouts still
+  open on resting on the maximize button.
+- **Control Panel > Desktop > Title bar buttons:** Windows 95's, or
+  Windows 3.1's two (the arrows, no close button). It changes every frame
+  at once, and the desktop's own programs (their dialogs, Program
+  Manager's groups) follow it.
+- Help's topic on the desktop, in English and Arabic, names the buttons.
+- Built with Retro Nim UI 0.40.0.
+
 ## 0.1.14
 
 - **The panel is Windows 95's taskbar**, in 3.1's colors: the **Start**

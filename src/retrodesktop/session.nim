@@ -66,6 +66,7 @@ proc readSettings() =
   elif firstTz.len > 0: putEnv("TZ", firstTz)
   else: delEnv("TZ")
   wm.pauseIconic = conf.setting("pauseIconic", "off") == "on"
+  captionButtons = buttonsOf(conf)
   if not wm.pauseIconic: wm.resumeAll()
   touchMode = conf.onOff("touch", inTermux())
   wm.bigFrames = touchMode

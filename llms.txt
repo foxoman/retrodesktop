@@ -33,7 +33,8 @@ the tray, the clock; on any edge) and the Desktop folder's icons.
   their own nodes (`accessNode`).
 - The window manager runs on the desktop's own X connection (retroui's
   `x11EventHook`); frames are X windows with title bars drawn by retroui's
-  canvas.
+  canvas, with Windows 95's minimize, maximize and close buttons or 3.1's
+  two (`buttons` in the desktop's settings, the kit's `captionButtons`).
 - Other programs get the look through XSETTINGS, X resources, fontconfig, a
   generated "Retro31" GTK 3 theme (3.1 scroll bars, no overlay scrolling)
   and the "Retro31" Xcursor theme in ~/.icons (retroui's

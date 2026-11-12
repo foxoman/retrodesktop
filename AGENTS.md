@@ -24,7 +24,8 @@ alike.
     (cascading: `MenuItem.sub`, 3.1's look, the Start menu's band with
     `big`), the work area (`workInset`, `workRect`, `workChanged`), and
     snapping as Windows 11's (zones of the work area, `layouts()`, the
-    preview, Snap Assist, the layouts on the maximize button, `winArrow`);
+    preview, Snap Assist, the layouts on the maximize button, `winArrow`;
+    the title bars' buttons, Windows 95's or 3.1's, `titleButtons`);
     `tick()` is its timers (a menu opening on a rest, the layouts), called
     from the desktop's frame
   - `session.nim` -- the desktop: background, icons, menu, welcome, exit,

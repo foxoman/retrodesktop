@@ -23,7 +23,7 @@ import xlib, common
 type
   Part* = enum
     ## Where in a frame the pointer is.
-    pNone, pClient, pTitle, pMenu, pMin, pMax, pN, pS, pW, pE, pNW, pNE, pSW, pSE
+    pNone, pClient, pTitle, pMenu, pMin, pMax, pClose, pN, pS, pW, pE, pNW, pNE, pSW, pSE
 
   Client* = ref object
     ## A program's window and the frame around it.
@@ -204,6 +204,61 @@ proc putBitmap*(w: Window; b: Bitmap; x, y: int) =
 
 proc hasButtons(c: Client): bool = c.transient == None and not c.splash
 
+proc hasClose(c: Client): bool = not c.splash and captionButtons == cbWin95
+  ## (Windows 95's close button: a program's dialogs have it too)
+
+proc titleButtons(c: Client; tw, s: int): tuple[min, max, close: int] =
+  ## Where the title bar's buttons begin in a title bar `tw` wide whose
+  ## buttons are `s` square (-1: not there): close at the right, a little
+  ## apart, then maximize and minimize -- or 3.1's two, without close
+  ## (the kit's `captionButtons`, as Control Panel sets it).
+  result = (-1, -1, -1)
+  var right = tw
+  if c.hasClose:
+    result.close = right - s
+    right -= s + max(2, s div 10)
+  if c.hasButtons:
+    result.max = right - s
+    result.min = right - 2 * s
+
+proc mark95(cv: Canvas2D; x, s: int; part: Part; maxed: bool; o: int) =
+  ## Windows 95's mark on a title bar button at `x`, `s` square: _, □, the
+  ## two windows of restore, X.
+  let t = ui.theme
+  let g = max(7, s * 9 div 16)
+  let w = max(2, (g + 3) div 7)              # (the strokes)
+  let l = max(1, w div 2)                    # (the boxes' sides)
+  let x0 = float(x + 1 + (s - 1 - g) div 2 + o)
+  let y0 = float((s - g) div 2 + o)
+  let gf = float(g)
+  cv.fillStyle = t.text
+  proc box(cv: Canvas2D; x, y, n: float) =
+    cv.fillRect(x, y, n, float(w))
+    cv.fillRect(x, y, float(l), n)
+    cv.fillRect(x + n - float(l), y, float(l), n)
+    cv.fillRect(x, y + n - float(l), n, float(l))
+  case part
+  of pMin:
+    cv.fillRect(x0 + float(g div 6), y0 + gf - float(w), float(g - g div 3), float(w))
+  of pMax:
+    if maxed:
+      let n = float(g * 3 div 4)
+      box(cv, x0 + gf - n, y0, n)
+      cv.fillStyle = t.face
+      cv.fillRect(x0, y0 + gf - n, n, n)
+      cv.fillStyle = t.text
+      box(cv, x0, y0 + gf - n, n)
+    else:
+      box(cv, x0, y0, gf)
+  of pClose:
+    cv.strokeStyle = t.text
+    cv.lineWidth = float(w) * 1.2
+    cv.beginPath()
+    cv.moveTo(x0 + 0.5, y0 + 0.5); cv.lineTo(x0 + gf - 0.5, y0 + gf - 0.5)
+    cv.moveTo(x0 + gf - 0.5, y0 + 0.5); cv.lineTo(x0 + 0.5, y0 + gf - 0.5)
+    cv.stroke()
+  else: discard
+
 proc triangle(cv: Canvas2D; cx, cy, s: float; up: bool) =
   cv.beginPath()
   if up:
@@ -287,23 +342,32 @@ proc drawFrame*(c: Client) =
     cv.strokeStyle = t.frame
     cv.lineWidth = 1
     cv.strokeRect(bx + 0.5, by + 0.5, bwid - 1, bh - 1)
-    # minimize and maximize (restore)
+    # minimize, maximize (restore) and close -- or 3.1's two, triangles
     var right = tw
-    if c.hasButtons:
-      let s = th
-      bevelButton(cv, tw - s, 0, s, c.pressed == pMax)
-      bevelButton(cv, tw - 2 * s, 0, s, c.pressed == pMin)
-      cv.fillStyle = t.text
-      let ts = float(s) * 0.2
-      let o = (if c.pressed == pMin: 1.0 else: 0.0)
-      triangle(cv, float(tw - 2 * s) + float(s) / 2 + o, float(s) / 2 + o, ts, false)
-      let om = (if c.pressed == pMax: 1.0 else: 0.0)
-      if c.maximized:
-        triangle(cv, float(tw - s) + float(s) / 2 + om, float(s) * 0.32 + om, ts * 0.8, true)
-        triangle(cv, float(tw - s) + float(s) / 2 + om, float(s) * 0.68 + om, ts * 0.8, false)
+    let s = th
+    let bt = titleButtons(c, tw, s)
+    if bt.close >= 0:
+      bevelButton(cv, bt.close, 0, s, c.pressed == pClose)
+      mark95(cv, bt.close, s, pClose, false, ord(c.pressed == pClose))
+      right = bt.close
+    if bt.max >= 0:
+      bevelButton(cv, bt.max, 0, s, c.pressed == pMax)
+      bevelButton(cv, bt.min, 0, s, c.pressed == pMin)
+      if captionButtons == cbWin95:
+        mark95(cv, bt.min, s, pMin, false, ord(c.pressed == pMin))
+        mark95(cv, bt.max, s, pMax, c.maximized, ord(c.pressed == pMax))
       else:
-        triangle(cv, float(tw - s) + float(s) / 2 + om, float(s) / 2 + om, ts, true)
-      right = tw - 2 * s
+        cv.fillStyle = t.text
+        let ts = float(s) * 0.2
+        let o = (if c.pressed == pMin: 1.0 else: 0.0)
+        triangle(cv, float(bt.min) + float(s) / 2 + o, float(s) / 2 + o, ts, false)
+        let om = (if c.pressed == pMax: 1.0 else: 0.0)
+        if c.maximized:
+          triangle(cv, float(bt.max) + float(s) / 2 + om, float(s) * 0.32 + om, ts * 0.8, true)
+          triangle(cv, float(bt.max) + float(s) / 2 + om, float(s) * 0.68 + om, ts * 0.8, false)
+        else:
+          triangle(cv, float(bt.max) + float(s) / 2 + om, float(s) / 2 + om, ts, true)
+      right = bt.min
     # the title, in the middle of what is left, cut short when it is long
     let px = max(9, int(round(float(th) * 0.62)))
     cv.font = "bold " & $px & "px sans-serif"
@@ -1759,7 +1823,7 @@ proc flyChoose(i: int) =
 
 proc maxButtonRect(c: Client): tuple[x, y, w, h: int] =
   let th = tbh()
-  (c.x + c.frameW - bw() - th, c.y + bw(), th, th)
+  (c.x + bw() + titleButtons(c, c.frameW - 2 * bw(), th).max, c.y + bw(), th, th)
 
 proc snapTick*(): int =
   ## The pointer resting on a maximize button: its layouts shown; a box
@@ -1998,9 +2062,10 @@ proc partAt(c: Client; x, y: int): Part =
   if y >= b and y < b + th and x >= b and x < fw - b:
     let tx = x - b
     if tx < th: return pMenu
-    if c.hasButtons:
-      if tx >= fw - 2 * b - th: return pMax
-      if tx >= fw - 2 * b - 2 * th: return pMin
+    let bt = titleButtons(c, fw - 2 * b, th)
+    if bt.close >= 0 and tx >= bt.close: return pClose
+    if bt.max >= 0 and tx >= bt.max and tx < bt.max + th: return pMax
+    if bt.min >= 0 and tx >= bt.min and tx < bt.min + th: return pMin
     return pTitle
   if c.splash or c.maximized:
     return (if y < b + th: pTitle else: pClient)
@@ -2062,7 +2127,7 @@ proc pressFrame(c: Client; e: XButtonEvent) =
       # holding a finger on the title still opens its menu)
       drag = (dkMove, c, part, int(e.xRoot), int(e.yRoot), c.x, c.y, c.w, c.h)
       aim = (false, false, zWhole)
-  of pMin, pMax:
+  of pMin, pMax, pClose:
     c.pressed = part
     drag = (dkButton, c, part, int(e.xRoot), int(e.yRoot), c.x, c.y, c.w, c.h)
     drawFrame(c)
@@ -2183,6 +2248,7 @@ proc endDrag(e: XButtonEvent) =
     if over:
       if part == pMin: minimize(c)
       elif part == pMax: maximize(c)
+      elif part == pClose: close(c)
   of dkNone: discard
 
 # ---- the events -------------------------------------------------------------------------------------

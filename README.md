@@ -14,8 +14,10 @@ one program of about 5 MB, nothing to set up.
 
 - **The window manager.** Every program's window gets the 3.1 frame: the
   title bar to move it by, the border and the corners to size it by, the
-  control-menu box (Restore, Minimize, Maximize, Close, Switch To), the
-  minimize and maximize buttons. Minimized windows are buttons on the
+  control-menu box (Restore, Minimize, Maximize, Close, Switch To), and
+  Windows 95's minimize, maximize and close buttons (the close button asks
+  the program to close, as Alt+F4; Control Panel > Desktop gives 3.1's
+  two instead, without a close button). Minimized windows are buttons on the
   panel (or, with the panel off, icons along the bottom of the desktop, as
   3.1 had them). Click to bring a window to the front; Alt+Tab
   shows 3.1's box with the next window while Alt is held; Alt+F4 closes

@@ -47,11 +47,15 @@ Every program opens in its own window.
   **maximize** button (or press Win+Z) for the **layouts**: halves, thirds,
   quarters; a click on a part puts the window there. Dragged away, a snapped
   window comes back to its own size.
-* The **minimize** button (the arrow down) puts it away: a button on the
+* The **minimize** button (_) puts it away: a button on the
   [panel](topic:panel) (or, with the panel off, an icon at the bottom of the
   desktop: double click it -- tap it -- to bring it back).
-* The **maximize** button (the arrow up), or a double click on the title bar,
+* The **maximize** button (the square), or a double click on the title bar,
   makes it fill the screen.
+* The **close** button (X, a little apart) asks the program to close the
+  window, as Alt+F4 does: it can still ask to save. Control Panel's Desktop
+  gives the windows 3.1's two buttons instead (the arrows down and up, no
+  close button).
 * The **control-menu box** (the bar at the left of the title) has Restore,
   Minimize, Maximize, Close and Switch To. Double click it to close the
   window. On a touch screen, hold a finger on the title bar for the same menu.

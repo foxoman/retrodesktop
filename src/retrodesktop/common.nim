@@ -11,7 +11,7 @@ import ar, hijri
 import retroui/uirelays/drivers/x11_driver
 
 const
-  DesktopVersion* = "0.1.14"
+  DesktopVersion* = "0.1.15"
   DesktopName* = "Retro Desktop"
   SettingsName* = "retrodesktop"
   Teal* = "#008080"
@@ -192,6 +192,11 @@ proc applyLanguage*(lang: string) =
   if lang == "ar": setUiLanguage("ar", @toolkitArabic, @desktopArabic)
   else: setUiLanguage("")
 
+proc buttonsOf*(s: Settings): CaptionButtons =
+  ## The title bars' buttons Control Panel set: Windows 95's (minimize,
+  ## maximize, close) or 3.1's two.
+  if s.setting("buttons", "win95") == "win31": cbWin31 else: cbWin95
+
 proc applyDesktopLook*() =
   ## The color scheme, font and text size Control Panel set, for one of the
   ## desktop's own programs.
@@ -199,6 +204,7 @@ proc applyDesktopLook*() =
   # (the cursors in the classic shapes, at the screen's size)
   x11DrawnCursors = 1
   ui.theme = schemeTheme(currentScheme(s))
+  captionButtons = buttonsOf(s)
   applyLanguage(s.setting("language", "en"))
   case s.setting("font", "sans")
   of "serif": setUiFont(ufSerif)

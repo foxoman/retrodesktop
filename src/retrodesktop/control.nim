@@ -31,6 +31,7 @@ var
   wallMode = 0
   pickWall = false
   fontKind = 0
+  buttonsKind = 0                     # (the title bars' buttons: Windows 95's, 3.1's)
   textPct = 100
   sizePct = 100
   touch = 0
@@ -122,6 +123,7 @@ proc readAll() =
   wallpaper = conf.setting("wallpaper", "")
   wallMode = max(0, WallModes.find(conf.setting("wallpaperMode", "fill")))
   fontKind = max(0, ["sans", "serif", "mono", "file"].find(conf.setting("font", "sans")))
+  buttonsKind = ord(buttonsOf(conf))
   fontFile = conf.setting("fontFile", "")
   night = conf.setting("night", "off") == "on"
   try:
@@ -181,6 +183,7 @@ proc saveAll() =
   conf["wallpaperMode"] = WallModes[clamp(wallMode, 0, WallModes.high)]
   if fontKind == 3 and fontFile.len == 0: fontKind = 0
   conf["font"] = ["sans", "serif", "mono", "file"][clamp(fontKind, 0, 3)]
+  conf["buttons"] = $CaptionButtons(clamp(buttonsKind, 0, 1))
   conf["fontFile"] = fontFile
   conf["night"] = (if night: "on" else: "off")
   conf["nightFrom"] = $nightFrom
@@ -309,6 +312,11 @@ proc desktopDialog() =
           row:
             for i, m in ["&Fill", "&Center", "&Tile", "&Stretch"]:
               radio(m, wallMode, i)
+    group "Windows":
+      form 0:
+        field "Title bar b&uttons:":
+          combo(["Windows 95: minimize, maximize, close", "Windows 3.1: minimize, maximize"],
+                buttonsKind)
     if inTermux():
       group "Termux":
         checkbox("&Keep Termux awake while the desktop runs (termux-wake-lock)", wakeLock)
