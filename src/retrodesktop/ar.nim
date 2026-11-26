@@ -338,6 +338,15 @@ const desktopArabic* = [
   ("All Files (*.*)", "كل الملفات (*.*)"),
   ("The date and the time are Android's (or the computer's): Settings > System > Date & time sets them. The time zone here is for the desktop's programs (TZ); empty: the system's own. The Hijri date is counted (the tabular calendar); Adjust moves it a day or two where the month began otherwise by the moon's sighting.",
    "التاريخ والوقت من أندرويد (أو من الحاسوب): تضبطهما الإعدادات > النظام > التاريخ والوقت. المنطقة الزمنية هنا لبرامج سطح المكتب (TZ)؛ وإن تُركت فارغة فهي منطقة النظام. التاريخ الهجري محسوب (التقويم الجدولي)؛ والتعديل يقدّمه أو يؤخّره يومًا أو يومين حيث بدأ الشهر بغير ذلك برؤية الهلال."),
+  # (Terminal)
+  ("MS-DOS Colors", "ألوان MS-DOS"),
+  ("Windows Colors", "ألوان ويندوز"),
+  ("Bold Letters", "حروف عريضة"),
+  ("Pictures from Programs", "صور البرامج"),
+  ("Find...", "بحث..."),
+  ("Find in the terminal", "البحث في الطرفية"),
+  ("No more of it.", "لا يوجد المزيد منه."),
+  ("About Terminal...", "حول الطرفية..."),
   # (the tour, and Help's buttons)
   ("Welcome", "مرحبًا"),
   ("This is Retro Desktop: Windows 3.1's look for your phone, tablet or " &

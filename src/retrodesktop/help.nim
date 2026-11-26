@@ -137,11 +137,21 @@ Terminal's programs (htop, NetHack...) get an item. [Contents](topic:contents)
 # Terminal
 
 The shell, in a PC's 16 text colors (Settings: Windows' black on white or
-MS-DOS's gray on black, bold letters, larger or smaller text).
+MS-DOS's gray on black, bold letters, pictures from programs, bigger or
+smaller text).
 
 * Ctrl+Shift+C copies what you selected, Ctrl+Shift+V pastes.
-* Shift+PgUp and Shift+PgDn go through what scrolled away (the wheel too).
-* Full-screen programs work: vim, nano, htop, mc, less.
+* Shift+PgUp and Shift+PgDn go through what scrolled away (the wheel and
+  the scroll bar too).
+* Ctrl+Shift+F finds in all of it, from the bottom up; Enter finds the next
+  one up, Esc closes the bar.
+* Ctrl+Shift+= and Ctrl+Shift+- make the text bigger and smaller,
+  Ctrl+Shift+0 brings it back.
+* Alt and a letter, and F10, go to the program (bash's Alt+B and Alt+F,
+  mc's Quit); Alt pressed alone opens the menus.
+* Arabic and Hebrew read right to left, Arabic's letters joined.
+* Full-screen programs work: vim, nano, htop, mc, less; neovim and helix
+  get kitty's keys, and pictures show (chafa, timg, yazi: Setup has Chafa).
 
 `retro-desktop terminal -e command` runs a command in it. [Contents](topic:contents)
 """),

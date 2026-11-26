@@ -66,7 +66,9 @@ alike.
     `help.nim`'s (a topic missing there shows in English)
   - `progman.nim`, `accessories.nim` (Clock, Calculator, Calendar,
     Cardfile), `control.nim`, `tasklist.nim`, `terminal.nim` -- the programs
-  - `vt.nim` -- the Terminal's screen: xterm's escape sequences, no drawing
+    (the Terminal on Retro Nim UI's `retroui/terminal`: its screen, keys,
+    pictures and right-to-left text are the kit's; the desktop gives it the
+    PC's colors, its menus and the find bar)
   - `browser.nim` -- Retro Browser: Firefox's profile with the 3.1
     userChrome.css, user.js
   - `setup.nim` -- Setup: the catalogue of Termux programs (each name

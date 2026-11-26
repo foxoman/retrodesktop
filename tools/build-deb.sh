@@ -10,14 +10,18 @@
 #   bin/retro-desktop     the desktop, Program Manager and the accessories
 #   bin/retro-files       File Manager (Retro Files)        \
 #   bin/retro-board       Board (Retro Board)                | from Retro Nim
-#   bin/retro-photo       Paintbrush (Retro Photo)           | UI's examples
+#   bin/retro-photo       Paintbrush (Retro Atelier)         | UI's examples
 #   bin/retro-notepad     Notepad                            |
 #   bin/retro-mail        Mail (Retro Mail)                  |
-#   bin/retro-communicator Communicator (XMPP)              /
+#   bin/retro-communicator Communicator (XMPP)               |
+#   bin/retro-navigator   Navigator (Retro Navigator)        |
+#   bin/retro-podcast     Podcasts (Retro Podcast)           |
+#   bin/retro-music       Music (Retro Music)               /
 #
 # RETROUI_SRC: a Retro Nim UI checkout (default ../retro, else it is cloned
 # into build/retroui). RETRO_APPS: which of the programs from the examples
-# (default "files board photo notepad mail communicator"; "" for none).
+# (default "files board photo notepad mail communicator navigator podcast
+# music"; "" for none).
 #
 # Retro Mail signs in with Microsoft and Google through the app IDs it is
 # built with: RETRO_MAIL_MICROSOFT_ID, RETRO_MAIL_GOOGLE_ID and
@@ -33,7 +37,7 @@ TOP=$PWD
 VERSION=$(sed -n 's/^ *DesktopVersion\* = "\(.*\)".*/\1/p' src/retrodesktop/common.nim)
 ARCH=aarch64
 TERMUX=/data/data/com.termux/files/usr
-APPS=${RETRO_APPS-"files board photo notepad mail communicator"}
+APPS=${RETRO_APPS-"files board photo notepad mail communicator navigator podcast music"}
 
 KIT=${RETROUI_SRC:-}
 if [ -z "$KIT" ]; then
@@ -74,6 +78,9 @@ for app in $APPS; do
                echo "   (no RETRO_MAIL_* app IDs in the environment: Mail will ask for the user's own)" ;;
     communicator) src=communicator.nim; exe=retro-communicator; icon="" ;;
     gallery) src=gallery.nim;     exe=retro-gallery; icon=gallery-icon.png ;;
+    navigator) src=navigator.nim; exe=retro-navigator; icon=navigator-icon.png ;;
+    podcast) src=podcast.nim;     exe=retro-podcast; icon=podcast-icon.png ;;
+    music)   src=music.nim;       exe=retro-music;   icon=music-icon.png ;;
     *) echo "unknown program: $app"; exit 1 ;;
   esac
   echo "== $exe"
@@ -93,6 +100,7 @@ Architecture: $ARCH
 Maintainer: Sultan Al Isaiee <sultan@foxoman.net>
 Installed-Size: $SIZE
 Depends: libx11, libxext, libxss, libandroid-shmem, termux-x11-nightly, libcurl, openssl
+Suggests: webkit2gtk-4.1, gst-plugins-good, chafa
 Homepage: https://github.com/foxoman/retrodesktop
 Description: A Windows 3.1 style desktop for Termux:X11
  Retro Desktop is a desktop and window manager in the style of Windows 3.1
@@ -105,7 +113,8 @@ Description: A Windows 3.1 style desktop for Termux:X11
  Clipboard Viewer, Minesweeper, Solitaire, Reversi, a DOS group for
  DOSBox-X, the Android apps, Help on F1, sounds, wallpapers and night
  colors, English or Arabic, Control Panel, Task List, File Manager,
- Paintbrush, Board, Notepad, Mail and Communicator. Start it with:
+ Paintbrush (Retro Atelier), Board, Notepad, Mail, Communicator,
+ Navigator, Podcasts and Music. Start it with:
  retro-desktop
 CTL
 mkdir -p build

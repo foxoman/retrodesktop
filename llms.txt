@@ -22,10 +22,11 @@ the tray, the clock; on any edge) and the Desktop folder's icons.
 
 - Install in Termux: `pkg install x11-repo && pkg install termux-x11-nightly libx11`,
   then `apt install ./retro-desktop_<version>_aarch64.deb` and `retro-desktop`.
-- Build: `nimble build -d:release` (needs retroui >= 0.26.0); the Termux
-  package: `sh tools/build-deb.sh` (with Retro Nim UI's Files, Board, Photo,
-  Notepad, Mail and Communicator; Mail's app IDs from RETRO_MAIL_* in the
-  environment while it builds).
+- Build: `nimble build -d:release` (needs retroui >= 0.77.2); the Termux
+  package: `sh tools/build-deb.sh` (with Retro Nim UI's Files, Board,
+  Atelier (Photo), Notepad, Mail, Communicator, Navigator, Podcast and
+  Music; Mail's app IDs from RETRO_MAIL_* in the environment while it
+  builds).
 - Screen readers: the programs tell Orca what they show through retroui's
   AT-SPI; the session starts a session bus where AT-SPI is installed and
   none was started (session.nim, `startScreenReaders`); the desktop's icons
@@ -89,9 +90,13 @@ the tray, the clock; on any edge) and the Desktop folder's icons.
   `_NET_CLOSE_WINDOW`; they follow the look through the root's
   `_RETRO_DESKTOP_LOOK` property. `retro-desktop --retro-command n` sends
   `_RETRO_DESKTOP` n from a script.
-- Terminal: `vt.nim` (xterm/VT220 escape sequences, scrollback, the
-  alternate screen) and `terminal.nim` (a pseudo-terminal, a reader thread
-  that wakes the window with an X ClientMessage, drawing in the CGA colors).
+- Terminal: `terminal.nim` on Retro Nim UI's `retroui/terminal`
+  (`newTerminal`, `spawn`, `terminalView`; the pseudo-terminal watched with
+  the X events, no thread): the CGA colors (`TermColors`, `themed = false`),
+  `boldBright`, `boldText`, `picsOn`, right-to-left rows in reading order
+  (`bidi`), `terminalKeysFirst` before the menu bar (Alt and a letter, F10
+  to the program), `terminalEditItems`, `terminalViewItems`,
+  `terminalItems`, a find bar on `findText`.
 - Menus over the windows (the desktop's, the icons', the control menu, the
   panel's Start menu) are `wm.showMenu(items, x, y)`: override-redirect
   windows with the pointer and the keyboard grabbed; letters, arrows (Right

@@ -112,6 +112,8 @@ proc catalog*(): seq[(string, seq[CatItem])] =
   main.add own("Terminal", selfCommand("terminal"), "terminal", "The shell's command line, in a PC's 16 text colors")
   main.add own("Web Browser", selfCommand("browser"), "browser",
                "Retro Browser: Firefox in the desktop's look, on a profile of its own")
+  companionItem("Navigator", "retro-navigator", "navigator",
+                "Retro Navigator: 1995's browser around today's web (WebKitGTK from Setup)", main)
   main.add own("Setup", selfCommand("setup"), "setup",
                "Programs to install, from Termux's packages: browsers, office, games...")
   if inTermux():
@@ -120,12 +122,14 @@ proc catalog*(): seq[(string, seq[CatItem])] =
   main.add own("Share Desktop", selfCommand("share"), "share", "Use this desktop from a computer (VNC)")
   main.add own("Read Me", "?help", "readme", "How the desktop works")
   companionItem("Notepad", "retro-notepad", "notepad", "Text files", acc)
-  companionItem("Paintbrush", "retro-photo", "paint", "Retro Photo: pictures and painting", acc)
+  companionItem("Paintbrush", "retro-photo", "paint", "Retro Atelier: photos, drawings, pages and slides", acc)
   companionItem("Board", "retro-board", "board", "Retro Board: a whiteboard for drawings and notes", acc)
   companionItem("Mail", "retro-mail", "mail", "Retro Mail", acc)
   companionItem("Communicator", "retro-communicator", "communicator",
                 "Retro Communicator: talk to your friends (XMPP)", acc)
   companionItem("Gallery", "retro-gallery", "gallery", "Retro Gallery: every control of Retro Nim UI", acc)
+  companionItem("Podcasts", "retro-podcast", "podcast", "Retro Podcast: shows to follow, play and download", acc)
+  companionItem("Music", "retro-music", "music", "Retro Music: your Spotify and YouTube Music in one player", acc)
   acc.add own("Write", selfCommand("write"), "write", "Documents with bold, italic, sizes and lists")
   acc.add own("Character Map", selfCommand("charmap"), "charmap", "Letters and symbols to copy")
   acc.add own("Picture Viewer", selfCommand("pictures"), "pictures", "Your photos and pictures")

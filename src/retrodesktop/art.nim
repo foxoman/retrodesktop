@@ -172,6 +172,62 @@ proc drawIcon(c: Canvas2D; kind: string) =
     c.lineWidth = 0.8
     c.beginPath(); c.moveTo(4, 16); c.lineTo(28, 16); c.stroke()
     c.beginPath(); c.arc(16, 16, 12, -PI / 2, PI / 2); c.stroke()
+  of "navigator":
+    # (a compass: its rose in a ring, the needle north red and south white)
+    c.fillStyle = Navy
+    c.beginPath(); c.arc(16, 16, 14, 0, 2 * PI); c.fill()
+    c.fillStyle = White
+    c.beginPath(); c.arc(16, 16, 12, 0, 2 * PI); c.fill()
+    c.strokeStyle = Dark
+    c.lineWidth = 1
+    for i in 0 .. 7:
+      let a = float(i) * PI / 4
+      c.beginPath(); c.moveTo(16 + cos(a) * 9.5, 16 + sin(a) * 9.5)
+      c.lineTo(16 + cos(a) * 11.5, 16 + sin(a) * 11.5); c.stroke()
+    c.fillStyle = Red
+    c.beginPath(); c.moveTo(16, 5); c.lineTo(19.5, 16); c.lineTo(12.5, 16); c.closePath(); c.fill()
+    c.fillStyle = Gray
+    c.beginPath(); c.moveTo(16, 27); c.lineTo(19.5, 16); c.lineTo(12.5, 16); c.closePath(); c.fill()
+    c.strokeStyle = Black
+    c.beginPath(); c.moveTo(16, 5); c.lineTo(19.5, 16); c.lineTo(16, 27); c.lineTo(12.5, 16)
+    c.closePath(); c.stroke()
+    c.fillStyle = Black
+    c.beginPath(); c.arc(16, 16, 1.5, 0, 2 * PI); c.fill()
+  of "podcast":
+    # (a microphone on its stand, the waves of a voice beside it)
+    c.fillStyle = Gray
+    c.beginPath(); c.arc(16, 9, 5, PI, 2 * PI); c.lineTo(21, 16); c.arc(16, 16, 5, 0, PI)
+    c.closePath(); c.fill()
+    c.strokeStyle = Black
+    c.lineWidth = 1
+    c.beginPath(); c.arc(16, 9, 5, PI, 2 * PI); c.lineTo(21, 16); c.arc(16, 16, 5, 0, PI)
+    c.closePath(); c.stroke()
+    c.strokeStyle = Dark
+    for r in 0 .. 2:
+      c.beginPath(); c.moveTo(12.5, 9 + float(r) * 3); c.lineTo(19.5, 9 + float(r) * 3); c.stroke()
+    c.strokeStyle = Black
+    c.lineWidth = 1.5
+    c.beginPath(); c.arc(16, 15, 8, 0.15 * PI, 0.85 * PI); c.stroke()
+    c.beginPath(); c.moveTo(16, 23); c.lineTo(16, 28); c.stroke()
+    c.beginPath(); c.moveTo(11, 29); c.lineTo(21, 29); c.stroke()
+    c.strokeStyle = Navy
+    c.lineWidth = 1.2
+    for (r, k) in [(4.0, 0), (7.0, 1)]:
+      discard k
+      c.beginPath(); c.arc(16, 12, 9 + r, -0.25 * PI, 0.25 * PI); c.stroke()
+      c.beginPath(); c.arc(16, 12, 9 + r, 0.75 * PI, 1.25 * PI); c.stroke()
+  of "music":
+    # (two notes joined by their beam, on a page of staff lines)
+    box(c, 4, 3, 24, 27, White)
+    c.fillStyle = Dark
+    for r in 0 .. 4: c.fillRect(6, 8 + float(r) * 4, 20, 1)
+    c.fillStyle = Black
+    c.beginPath(); c.ellipse(11, 24, 3.2, 2.4, -0.4, 0, 2 * PI); c.fill()
+    c.beginPath(); c.ellipse(21, 21, 3.2, 2.4, -0.4, 0, 2 * PI); c.fill()
+    c.fillRect(13.4, 9, 1.6, 15)
+    c.fillRect(23.4, 6, 1.6, 15)
+    c.beginPath(); c.moveTo(13.4, 9); c.lineTo(25, 6); c.lineTo(25, 9); c.lineTo(13.4, 12)
+    c.closePath(); c.fill()
   of "mail":
     box(c, 3, 8, 26, 17, White)
     c.strokeStyle = Black

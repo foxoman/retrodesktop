@@ -74,7 +74,13 @@ one program of about 5 MB, nothing to set up.
 - **Terminal**, the desktop's own: the shell in a PC's 16 text colors
   (black on white, as Windows had it, or MS-DOS Prompt's gray on black), for everything from
   `ls` to vim, nano, htop and mc -- xterm's escape sequences, 256 and 24-bit
-  colors, the mouse, a scrollback, copy and paste (Ctrl+Shift+C, V).
+  colors, the mouse, a scrollback with its scroll bar, copy and paste (Ctrl+Shift+C, V),
+  Find (Ctrl+Shift+F). It is Retro Nim UI's terminal underneath: Arabic and
+  Hebrew read right to left with Arabic's letters joined, kitty's keyboard
+  protocol for neovim and helix, the pictures programs send by kitty's
+  graphics protocol (`chafa`, `timg`, `yazi`), the cursor's shapes, bigger
+  and smaller text (Ctrl+Shift+= and -). Alt and a letter and F10 go to the
+  program (bash's words, mc's Quit); Alt alone opens the menus.
 
   ![Terminal](docs/terminal.png)
 
@@ -122,12 +128,15 @@ one program of about 5 MB, nothing to set up.
   the one you chose ("Always use this program"), else the one that says it
   takes it, else the Open With box (in Termux, an Android app too).
 - **From Retro Nim UI's examples:** File Manager (Retro Files), Paintbrush
-  (Retro Photo), Board (Retro Board), Notepad, Mail (Retro Mail: Microsoft
-  365, Outlook.com, Gmail) and Communicator (Retro Communicator: chat on
+  (Retro Atelier: photos, drawings, pages, slides), Board (Retro Board), Notepad, Mail (Retro Mail: Microsoft
+  365, Outlook.com, Gmail), Communicator (Retro Communicator: chat on
   XMPP -- an account on any public server, made from inside it if you
   like; friends, groups, rooms, away messages, files, voice messages, your
   history brought in from the server when you sign on, and end-to-end
-  encryption with OMEMO, as Conversations and the others do it).
+  encryption with OMEMO, as Conversations and the others do it),
+  Navigator (Retro Navigator: 1995's browser around today's web, with
+  WebKitGTK from Setup), Podcasts (Retro Podcast) and Music (Retro Music:
+  your Spotify and YouTube Music).
 
   ![Communicator](docs/communicator.png)
 
@@ -255,6 +264,8 @@ that with the issue. Control Panel > System Check shows what is missing. `pkill 
 | Android's Back | closes the window in front (when Control Panel > Windows says so) |
 | Ctrl+Shift+C, Ctrl+Shift+V | copy and paste in the Terminal |
 | Shift+PgUp, Shift+PgDn | the Terminal's scrollback |
+| Ctrl+Shift+F | find in the Terminal |
+| Ctrl+Shift+=, Ctrl+Shift+- | the Terminal's text bigger, smaller (Ctrl+Shift+0: back) |
 
 A right click on the desktop (a finger held on it) opens its menu, over
 every window: Program Manager, Task List, Control Panel, Terminal, Run...,
@@ -310,8 +321,8 @@ programs from Retro Nim UI's examples:
 sh tools/build-deb.sh
 ```
 
-It has Retro Nim UI's File Manager, Paintbrush, Board, Notepad, Mail and
-Communicator too (`RETRO_APPS` chooses). Mail signs in with the Microsoft
+It has Retro Nim UI's File Manager, Paintbrush, Board, Notepad, Mail,
+Communicator, Navigator, Podcasts and Music too (`RETRO_APPS` chooses). Mail signs in with the Microsoft
 and Google app registrations it is built with: `RETRO_MAIL_MICROSOFT_ID`,
 `RETRO_MAIL_GOOGLE_ID` and `RETRO_MAIL_GOOGLE_SECRET` in the environment
 while it builds (the repository's secrets on GitHub). They are never in

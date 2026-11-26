@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.1.16
+
+- **Terminal on Retro Nim UI's terminal.** The desktop's own screen code is
+  gone: the Terminal is the kit's terminal in the PC's 16 colors (Windows'
+  black on white, MS-DOS's gray on black, bold letters in the bright
+  colors), and with it:
+  - **Arabic and Hebrew** read right to left, Arabic's letters joined -- a
+    prompt's line stays left to right with what you type in Arabic right to
+    left in it, a line of an Arabic file right to left; selecting and the
+    cursor follow the letters.
+  - **Pictures from programs** (kitty's graphics protocol): `chafa`, `timg`,
+    `yazi`'s previews show their pictures in the text (Settings > Pictures
+    from Programs; Setup offers Chafa).
+  - **kitty's keyboard protocol** for the programs that ask (neovim, helix,
+    kakoune), the cursor's shapes (vim's bar in insert mode).
+  - **Find** (Edit > Find..., Ctrl+Shift+F): a bar over the screen that
+    finds in all it kept, from the bottom up as you type; Enter the next one
+    up, Esc closes it.
+  - A scroll bar to what scrolled away; text bigger, smaller and back
+    (Settings, Ctrl+Shift+=, Ctrl+Shift+-, Ctrl+Shift+0, kept); Edit > Reset
+    and Reset and Clear for a program that left the screen in a mess.
+  - Alt and a letter and F10 still go to the program (bash's words, mc's
+    and htop's Quit); Alt pressed alone opens the menus.
+  - It waits on the shell with the window's own X events: no thread, no
+    CPU while nothing happens.
+- **Navigator, Podcasts and Music** in Program Manager and the Termux
+  package: Retro Navigator (1995's browser around today's web; Setup offers
+  WebKitGTK for it), Retro Podcast and Retro Music (your Spotify and
+  YouTube Music; Setup offers GStreamer for their sound). Paintbrush is
+  Retro Atelier now: photos, drawings, pages and slides.
+- Setup: WebKitGTK, GStreamer and Chafa.
+- The Terminal's words in Arabic, and Help's Terminal page in both
+  languages, say what is new.
+- Built with Retro Nim UI 0.77.2: its color schemes, the focus ring, the
+  command search (Ctrl+Shift+P in every program with a menu bar), Arabic set
+  as HarfBuzz sets it and the rest since 0.40 come with it.
+
 ## 0.1.15
 
 - **Windows 95's title bar buttons** on every window: minimize, maximize
